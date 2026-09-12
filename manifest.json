@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "AI Inbox",
+  "version": "0.4.0",
+  "minimum_chrome_version": "120",
+  "description": "Save the current ChatGPT conversation and images to Obsidian with one click.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "inbox-background.js"
+  },
+  "action": {
+    "default_title": "AI Inbox",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "_execute_action": {}
+  }
+}

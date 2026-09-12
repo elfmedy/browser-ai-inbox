@@ -1,0 +1,36 @@
+{
+  "name": "browser-ai-inbox",
+  "version": "0.4.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "node scripts/build.mjs",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && node scripts/check-package.mjs",
+    "package": "npm run check && python scripts/package.py"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "0.28.2",
+    "eslint": "^9.39.4",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm": "3.1.0",
+    "mdast-util-math": "3.0.0",
+    "micromark-extension-gfm": "3.0.0",
+    "micromark-extension-math": "3.1.0",
+    "zod": "4.6.2"
+  },
+  "description": "Save ChatGPT conversations to Obsidian."
+}
