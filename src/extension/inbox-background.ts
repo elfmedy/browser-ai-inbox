@@ -1,4 +1,5 @@
 import { createMenuUpdater } from './inbox-menus';
+import { conversationLocation } from '../shared/providers';
 import { ExportOptions } from '../shared/export-options';
 import { z } from 'zod';
 import { Snapshot } from '../core/schema';
@@ -14,9 +15,9 @@ const conversationBusy = new Set<string>();
 const runPages = new Map<number, string>();
 const Receipt = z.object({ requestId: z.uuid(), action: z.enum(['created', 'updated', 'forked', 'unchanged']), path: z.string().max(4096),
   noteId: z.uuid(), revision: z.number().int().nonnegative(), messages: z.number().int().nonnegative(), images: z.number().int().nonnegative() });
-const supported = (url: string | undefined) => !!url && /^https:\/\/chatgpt\.com\/c\/[A-Za-z0-9-]+\/?$/.test(url);
+const supported = (url: string | undefined) => !!conversationLocation(url);
 
-async function feedback(tabId: number, data: Feedback, fallback = false) {
+async function feedback(tabId: number, data: Feedback, _fallback = false) {
   const pageUrl = data.pageUrl ?? runPages.get(tabId); if (pageUrl) data = { ...data, pageUrl };
   await chrome.storage.local.set({ [`status:${tabId}`]: data, lastStatus: data });
   try {
@@ -25,7 +26,7 @@ async function feedback(tabId: number, data: Feedback, fallback = false) {
     const stored = await chrome.storage.local.get('preferences');
     const language = (stored.preferences as { language?: string } | undefined)?.language ?? 'auto';
     await chrome.tabs.sendMessage(tabId, { type: 'feedback', data, language });
-  } catch { if (fallback) await openStatus(tabId); }
+  } catch { /* Restricted pages use the action popup; never open a tab automatically. */ }
 }
 async function openStatus(tabId?: number) {
   const url = chrome.runtime.getURL(`status.html${tabId !== undefined ? `?tab=${tabId}` : ''}`);
@@ -33,8 +34,14 @@ async function openStatus(tabId?: number) {
   if (existing?.id !== undefined) await chrome.tabs.update(existing.id, { url, active: true }); else await chrome.tabs.create({ url });
 }
 async function prepare(tabId: number, pageUrl: string, connection: Connection): Promise<Job> {
-  const id = new URL(pageUrl).pathname.split('/')[2]!;
-  const revision = z.object({ revision: z.number().int().nonnegative() }).parse(await receiver(connection, `v1/conversations/${id}`)).revision;
+  const source = conversationLocation(pageUrl);
+  if (!source) throw new ProbeError('UNSUPPORTED_PAGE', 'Open a supported conversation');
+  if (source.provider !== 'chatgpt') {
+    const capabilities = z.object({ providers: z.array(z.string()).optional() }).parse(await receiver(connection, 'v1/hello'));
+    if (!capabilities.providers?.includes(source.provider)) throw new ProbeError('PLUGIN_UPDATE_REQUIRED', 'Update the Obsidian plugin');
+  }
+  const path = source.provider === 'chatgpt' ? source.id : `${source.provider}/${source.id}`;
+  const revision = z.object({ revision: z.number().int().nonnegative() }).parse(await receiver(connection, `v1/conversations/${path}`)).revision;
   const exportOptions = await receiver(connection, 'v1/export-options').catch(error => {
     if (error instanceof ProbeError && error.code === 'NOT_FOUND') throw new ProbeError('PLUGIN_UPDATE_REQUIRED', 'Update the Obsidian plugin');
     throw error;
@@ -159,6 +166,13 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {
     void chrome.tabs.get(message.tabId).then(save).catch(() => undefined); reply({ accepted: true });
   }
   if (!sender.url?.startsWith(chrome.runtime.getURL(''))) return;
+  if ('type' in message && message.type === 'save-active') {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+      const tab = tabs[0];
+      if (!tab || !supported(tab.url)) { reply({ accepted: false }); return; }
+      void save(tab); reply({ accepted: true });
+    }).catch(() => reply({ accepted: false })); return true;
+  }
   if ('type' in message && message.type === 'vault-overview') {
     void vaultOverview().then(value => reply({ ok: true, ...value })).catch(error => reply({ ok: false, code: error instanceof ProbeError ? error.code : 'OBSIDIAN_UNAVAILABLE' })); return true;
   }

@@ -1,4 +1,4 @@
-import { thinkingMessage } from './thinking';
+import { reasoningActivityIds, thinkingMessage } from './thinking';
 import { isRecord, ProbeError } from '../shared/errors';
 import { parseVisibleMessage, type GraphMessage } from './graph';
 import { summarizeMessageShapes } from './graph-shape';
@@ -42,14 +42,15 @@ export function inspectMessageList(input: unknown, expectedId: string, coverage:
   if (coverage !== 'complete') reject(coverage === 'partial' ? 'MESSAGE_ARRAY_PARTIAL' : 'MESSAGE_ARRAY_PAGINATION_UNKNOWN');
   const ids = new Set<string>();
   const toolNames = records.length <= 20000 ? collectToolNames(records) : new Set<string>();
+  const activities = records.length <= 20000 ? reasoningActivityIds(records) : new Set<string>();
   if (diagnostics.identityMatches && records.length <= 20000) {
     for (const [index, record] of records.entries()) {
       if (!isRecord(record) || typeof record.id !== 'string' || !record.id) { reject('MESSAGE_ID_MISSING'); continue; }
       if (ids.has(record.id)) { diagnostics.uniqueIds = false; reject('DUPLICATE_MESSAGE_ID'); }
       ids.add(record.id);
       try {
-        if (thinkingMessage(record, toolNames, false) !== undefined) thinkingIds.push(record.id);
-        const message = parseVisibleMessage(record, toolNames, enableToolImages, includeThinking);
+        if (thinkingMessage(record, toolNames, false, activities.has(record.id)) !== undefined) thinkingIds.push(record.id);
+        const message = parseVisibleMessage(record, toolNames, enableToolImages, includeThinking, activities.has(record.id));
         if (message) messages.push(message);
         else {
           diagnostics.ignoredInternalMessages++;

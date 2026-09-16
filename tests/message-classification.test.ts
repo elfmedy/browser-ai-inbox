@@ -19,7 +19,7 @@ describe('observed message categories with synthetic content', () => {
     expect(result.messages.map(item => item.id)).toEqual(['user', 'progress', 'final']);
     expect(result.messages[1]?.parts).toEqual([{ type: 'text', text: commentary.content.parts[0] }]);
   });
-  it('reproduces the reported 22-record shape while retaining all five user-facing records', () => {
+  it('excludes commentary inside a reasoning segment in the reported 22-record shape', () => {
     const sourceMessages = [message('s1', 'system'), message('context', 'assistant', 'model_editable_context'), message('u1', 'user'),
       message('t1', 'assistant', 'thoughts'), { ...message('progress', 'assistant', 'text', 'all'), channel: 'commentary' },
       ...Array.from({ length: 4 }, (_, index) => message(`call-${index}`, 'assistant', 'text', 'fixture_tool.run')),
@@ -28,9 +28,9 @@ describe('observed message categories with synthetic content', () => {
       { ...message('a1', 'assistant', 'text', 'all'), channel: 'final' }, message('s2', 'system'), message('u2', 'user'),
       message('r2', 'assistant', 'reasoning_recap'), { ...message('a2', 'assistant', 'text', 'all'), channel: 'final' }];
     const result = inspectMessageList({ conversation_id: 'fixture', current_node: 'a2', messages: sourceMessages }, 'fixture', 'complete');
-    expect(result.diagnostics.recordCount).toBe(22); expect(result.diagnostics.ignoredInternalMessages).toBe(17);
+    expect(result.diagnostics.recordCount).toBe(22); expect(result.diagnostics.ignoredInternalMessages).toBe(18);
     expect(result.diagnostics.validated).toBe(true);
-    expect(result.messages.map(item => item.id)).toEqual(['u1', 'progress', 'a1', 'u2', 'a2']);
+    expect(result.messages.map(item => item.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
   });
   it('still excludes hidden and tool-directed commentary and rejects unfinished commentary', () => {
     const commentary = { ...message('progress', 'assistant', 'text', 'all'), channel: 'commentary' };

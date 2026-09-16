@@ -1,6 +1,6 @@
 {
   "name": "browser-ai-inbox",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -17,10 +17,13 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.1.0",
+    "@types/jsdom": "30.0.0",
     "@types/node": "^22.0.0",
+    "@types/turndown": "5.0.6",
     "esbuild": "0.28.2",
     "eslint": "^9.39.4",
     "eslint-plugin-obsidianmd": "^0.4.2",
+    "jsdom": "30.0.1",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   },
@@ -30,7 +33,9 @@
     "mdast-util-math": "3.0.0",
     "micromark-extension-gfm": "3.0.0",
     "micromark-extension-math": "3.1.0",
+    "turndown": "7.2.4",
+    "turndown-plugin-gfm": "1.0.2",
     "zod": "4.6.2"
   },
-  "description": "Save ChatGPT conversations to Obsidian."
+  "description": "Save ChatGPT, Gemini, and Claude conversations to Obsidian."
 }

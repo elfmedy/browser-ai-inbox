@@ -47,7 +47,7 @@ describe('context menu lifecycle', () => {
     expect(state.items.get('settings')?.title).toBe('Switch vault / Settings');
     state.setPrefs({ language: 'zh', contextMenu: true }); await update();
     expect(state.items.get('settings')?.title).toBe('切换仓库 / 设置');
-    expect(state.items.get('save')?.documentUrlPatterns).toEqual(['https://chatgpt.com/c/*']);
+    expect(state.items.get('save')?.documentUrlPatterns).toEqual(['https://chatgpt.com/c/*', 'https://gemini.google.com/app/*', 'https://gemini.google.com/u/*/app/*', 'https://claude.ai/chat/*']);
   });
   it.each(['removeAll', 'create'] as const)('consumes %s lastError, reports failure, and allows the next rebuild', async operation => {
     const state = fixture(); const update = createMenuUpdater(); state.fail(operation);

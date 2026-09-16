@@ -1,4 +1,4 @@
-import { thinkingMessage } from './thinking';
+import { reasoningActivityIds, thinkingMessage } from './thinking';
 import { ProbeError, requireRecord } from '../shared/errors';
 import { collectToolNames, internalMessageReason } from './message-classification';
 import { attachmentDescriptions, metadataImages, parseImagePart, toolImages } from './image-parts';
@@ -50,6 +50,7 @@ export function verifyCurrentPath(input: unknown, expectedConversationId: string
   const messages: GraphMessage[] = [];
   const thinkingIds: string[] = [];
   const toolNames = collectToolNames(chain.map(entry => entry.node.message));
+  const activities = reasoningActivityIds(chain.map(entry => entry.node.message));
   let ignoredInternalMessages = 0;
   for (let index = 0; index < chain.length; index++) {
     const entry = chain[index]!;
@@ -62,8 +63,9 @@ export function verifyCurrentPath(input: unknown, expectedConversationId: string
       continue;
     }
     const rawMessage = requireRecord(entry.node.message);
-    if (thinkingMessage(rawMessage, toolNames, false) !== undefined && typeof rawMessage.id === 'string') thinkingIds.push(rawMessage.id);
-    const message = parseVisibleMessage(entry.node.message, toolNames, enableToolImages, includeThinking);
+    const grouped = typeof rawMessage.id === 'string' && activities.has(rawMessage.id);
+    if (thinkingMessage(rawMessage, toolNames, false, grouped) !== undefined && typeof rawMessage.id === 'string') thinkingIds.push(rawMessage.id);
+    const message = parseVisibleMessage(entry.node.message, toolNames, enableToolImages, includeThinking, grouped);
     if (message) messages.push(message);
     else ignoredInternalMessages++;
   }
@@ -72,10 +74,10 @@ export function verifyCurrentPath(input: unknown, expectedConversationId: string
 }
 
 /** Shared content rules; callers separately prove identity, ordering and range. */
-export function parseVisibleMessage(input: unknown, toolNames: ReadonlySet<string> = new Set(), enableToolImages = false, includeThinking = false): GraphMessage | null {
+export function parseVisibleMessage(input: unknown, toolNames: ReadonlySet<string> = new Set(), enableToolImages = false, includeThinking = false, groupedActivity = false): GraphMessage | null {
     const message = requireRecord(input, 'MISSING_MESSAGE');
     const author = requireRecord(message.author, 'UNKNOWN_ROLE');
-    const thinking = thinkingMessage(message, toolNames, includeThinking);
+    const thinking = thinkingMessage(message, toolNames, includeThinking, groupedActivity);
     if (thinking !== undefined) return thinking;
     const channel = message.channel;
     if (internalMessageReason(message, toolNames)) return null;

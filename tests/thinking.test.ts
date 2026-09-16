@@ -7,6 +7,18 @@ const thought = { id: 'thought', author: { role: 'assistant' }, recipient: 'all'
     thoughts: [{ summary: 'Synthetic summary', content: 'Synthetic expanded content\n\n- Detail', finished: true }] } };
 const final = { id: 'answer', author: { role: 'assistant' }, channel: 'final', status: 'finished_successfully', content: { content_type: 'text', parts: ['Answer'] } };
 describe('optional UI thinking summaries', () => {
+  it('recognizes unlabelled commentary in a reasoning segment independently of UI expansion', () => {
+    const commentary = { ...final, id: 'activity', channel: 'commentary', content: { content_type: 'text', parts: ['Introduction in thinking panel'] } };
+    const source = { conversation_id: 'chat', current_node: 'answer', messages: [commentary, thought, final] };
+    const off = inspectMessageList(source, 'chat', 'complete', true, false);
+    expect(off.messages.map(m => m.id)).toEqual(['answer']);
+    expect(off.thinkingIds).toEqual(['activity', 'thought']);
+    const on = inspectMessageList(source, 'chat', 'complete', true, true);
+    expect(on.messages[0]?.sourceKind).toBe('thinking'); expect(on.messages[2]?.sourceKind).toBeUndefined();
+    const next = { ...commentary, id: 'ordinary' };
+    const independent = inspectMessageList({ ...source, current_node: 'ordinary', messages: [...source.messages, next] }, 'chat', 'complete', true, false);
+    expect(independent.messages.map(m => m.id)).toEqual(['answer', 'ordinary']);
+  });
   it('defaults off; opt-in reads the pinned summary shape, not raw analysis', () => {
     expect(parseVisibleMessage(thought)).toBeNull();
     const result = parseVisibleMessage(thought, new Set(), true, true);

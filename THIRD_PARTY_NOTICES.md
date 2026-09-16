@@ -48,6 +48,9 @@ Their notices apply to those portions; original authorship is not reassigned.
   channel handling in `mergeContinuationNodes` in `src/api.ts`. AI Inbox keeps
   original message IDs/order rather than merging adjacent assistant records;
   hidden/reasoning/tool-directed messages remain excluded.
+- From 0.5.0, commentary inside a segment containing thought/recap records is
+  grouped with the thinking panel, including activity without `reasoning_title`.
+  User/final-answer boundaries keep standalone ordinary commentary separate.
 
 ## OwlCt/ChatGPT-Export
 
@@ -77,3 +80,18 @@ protocol input; its full license is included in the generated dependency notices
 
 
 This repository was split from https://github.com/elfmedy/obsidian-ai-inbox at commit `68dc2aab82ac4da1acd614a0978cba18b4bde840`. Original copyright and adapted-code licenses are retained.
+
+## AI Chat Exporter
+
+- Source: https://github.com/TheBluCoder/AI-chat-exporter
+- Revision: `3253d7696a112204137c4c3a1843a3c7d20e14b9`.
+- License: MIT, copyright 2024 AI Chat Exporter Contributors.
+- Upstream: `src/scrapers/config/gemini.config.js`, `claude.config.js`,
+  platform scrapers and `src/scrapers/base/BaseScraper.js`.
+- Adaptation: `src/capture/dom-providers.ts`: message/content selectors,
+  ancestor scroll-container detection and bounded top-loading. Updated for the
+  live DOM, Claude ARIA sequence validation, detached DOM conversion, explicit
+  unsupported-content errors and source-change checks. No silent message skipping.
+- Full license: `third-party/ai-chat-exporter.LICENSE`.
+- HTML-to-Markdown uses Turndown and its GFM plugin (MIT). Exact versions and
+  full transitive licenses are in `third-party/npm-dependencies.txt`.

@@ -16,7 +16,7 @@ async function rebuild() {
     { id: 'status', title: zh ? '最近保存状态' : 'Last save status', contexts: ['action'] },
   ];
   if (prefs?.contextMenu !== false) items.push({ id: 'save', title: zh ? '保存当前聊天到 Obsidian' : 'Save current chat to Obsidian',
-    contexts: ['page'], documentUrlPatterns: ['https://chatgpt.com/c/*'] });
+    contexts: ['page'], documentUrlPatterns: ['https://chatgpt.com/c/*', 'https://gemini.google.com/app/*', 'https://gemini.google.com/u/*/app/*', 'https://claude.ai/chat/*'] });
   for (const item of items) await new Promise<void>((resolve, reject) => {
     chrome.contextMenus.create(item, () => completed(resolve, reject));
   });

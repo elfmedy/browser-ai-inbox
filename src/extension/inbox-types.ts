@@ -7,6 +7,7 @@ export type Stage = 'connecting' | 'pairing' | 'reading' | 'images' | 'checking'
 export interface Connection { endpoint: string; vaultId: string; token: string; }
 export interface Preferences { language: 'auto' | 'zh' | 'en'; contextMenu: boolean; }
 export interface CaptureDiagnostics { adapterVersion: 2; phase: 'reading' | 'checking'; httpStatus: number | null;
+  provider?: 'chatgpt' | 'gemini' | 'claude'; dom?: { messages: number; history: string };
   requestCode: string | null; validation: ReturnType<typeof inspectMessageList>['diagnostics'] | null; }
 export class CaptureFailure extends ProbeError {
   constructor(code: string, public readonly diagnostics?: CaptureDiagnostics) { super(code, 'Capture failed before submission'); }

@@ -10,7 +10,7 @@ assert.equal(manifest.version, pkg.version); assert.equal(lock.version, pkg.vers
 const browser = manifest.manifest_version === 3; const directory = browser ? 'browser-extension' : 'obsidian-plugin';
 const base = resolve(root, 'dist', directory);
 assert.deepEqual(JSON.parse(await readFile(resolve(base, 'manifest.json'), 'utf8')), manifest);
-const native = browser ? ['manifest.json', 'inbox-background.js', 'inbox-capture.js', 'inbox-card.js', 'inbox-options.js', 'inbox-status.js', 'options.html', 'status.html', 'inbox.css', ...[16, 32, 48, 128].map(size => `icon-${size}.png`)] : ['manifest.json', 'main.js', 'versions.json'];
+const native = browser ? ['manifest.json', 'inbox-background.js', 'inbox-capture.js', 'inbox-card.js', 'inbox-options.js', 'inbox-status.js', 'inbox-popup.js', 'popup.html', 'popup.css', 'options.html', 'status.html', 'inbox.css', ...[16, 32, 48, 128].map(size => `icon-${size}.png`)] : ['manifest.json', 'main.js', 'versions.json'];
 const licenses = ['LICENSE', 'THIRD_PARTY_NOTICES.md', ...(await readdir(resolve(root, 'third-party'))).map(file => `third-party/${file}`)];
 async function tree(directory, prefix = '') {
   const result = {};
@@ -25,7 +25,7 @@ const before = await tree(base);
 assert.deepEqual(Object.keys(before).sort(), [...native, ...licenses].sort(), 'Unexpected release files');
 for (const file of licenses) assert.equal(await readFile(resolve(base, file), 'utf8'), await readFile(resolve(root, file), 'utf8'));
 if (browser) {
-  assert.equal(manifest.action.default_popup, undefined); assert.equal(manifest.commands._execute_action.suggested_key, undefined);
+  assert.equal(manifest.action.default_popup, 'popup.html'); assert.equal(manifest.commands._execute_action.suggested_key, undefined);
   assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1/*']);
   assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'contextMenus', 'scripting', 'storage']);
   const background = await readFile(resolve(base, 'inbox-background.js'), 'utf8');

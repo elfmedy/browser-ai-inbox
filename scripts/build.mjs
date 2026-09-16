@@ -10,10 +10,10 @@ if (dirname(destination) !== resolve(root, 'dist')) throw Error('Unexpected buil
 await rm(destination, { recursive: true, force: true });
 await mkdir(destination, { recursive: true });
 if (browser) {
-  for (const entry of ['background', 'capture', 'card', 'options', 'status']) await build({
+  for (const entry of ['background', 'capture', 'card', 'options', 'status', 'popup']) await build({
     entryPoints: [resolve(root, `src/extension/inbox-${entry}.ts`)], bundle: true,
     outfile: resolve(destination, `inbox-${entry}.js`), platform: 'browser', format: 'iife', target: 'chrome120' });
-  for (const file of ['options.html', 'status.html', 'inbox.css']) await copyFile(resolve(root, 'src/extension', file), resolve(destination, file));
+  for (const file of ['options.html', 'status.html', 'inbox.css', 'popup.html', 'popup.css']) await copyFile(resolve(root, 'src/extension', file), resolve(destination, file));
   for (const size of [16, 32, 48, 128]) await copyFile(resolve(root, `src/extension/icons/icon-${size}.png`), resolve(destination, `icon-${size}.png`));
 } else {
   // BRAT installs only runtime files: embed the complete license inventory.

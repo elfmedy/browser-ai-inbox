@@ -7,12 +7,35 @@ import type { GraphMessage } from './graph';
 // Shape and reasoning_title classification reviewed against Pionxzh's pinned
 // api.ts / attachThinkingToNodes. Only the UI summary records are supported;
 // raw analysis, model context, and tool input/output remain internal.
-export function thinkingMessage(input: Record<string, unknown>, tools: ReadonlySet<string>, include: boolean): GraphMessage | null | undefined {
+/** Commentary within a reasoning segment belongs to the collapsible activity
+ * panel even when it has no reasoning_title. Flush at each final answer/user
+ * boundary: ordinary commentary in a different segment stays visible. */
+export function reasoningActivityIds(records: unknown[]): Set<string> {
+  const result = new Set<string>();
+  let segment: Record<string, unknown>[] = [];
+  const flush = () => {
+    if (segment.some(message => isRecord(message.content) &&
+      (['thoughts', 'reasoning_recap'].includes(String(message.content.content_type)) ||
+        (isRecord(message.metadata) && typeof message.metadata.reasoning_title === 'string' && !!message.metadata.reasoning_title)))) {
+      for (const message of segment) if (isRecord(message.author) && message.author.role === 'assistant' &&
+        message.channel === 'commentary' && typeof message.id === 'string') result.add(message.id);
+    }
+    segment = [];
+  };
+  for (const message of records) {
+    if (!isRecord(message)) continue;
+    if ((isRecord(message.author) && message.author.role === 'user') || message.channel === 'final') flush();
+    else segment.push(message);
+  }
+  flush(); return result;
+}
+
+export function thinkingMessage(input: Record<string, unknown>, tools: ReadonlySet<string>, include: boolean, groupedActivity = false): GraphMessage | null | undefined {
   if (!isRecord(input.author) || input.author.role !== 'assistant' || !isRecord(input.content)) return undefined;
   const content = input.content;
   const metadata = isRecord(input.metadata) ? input.metadata : {};
   const summaryRecord = content.content_type === 'thoughts' || content.content_type === 'reasoning_recap';
-  const activity = typeof metadata.reasoning_title === 'string' && !!metadata.reasoning_title &&
+  const activity = (groupedActivity || (typeof metadata.reasoning_title === 'string' && !!metadata.reasoning_title)) &&
     content.content_type === 'text' && input.channel !== 'final';
   if (!summaryRecord && !activity) return undefined;
   const images = activity ? metadataImages(input) : [];

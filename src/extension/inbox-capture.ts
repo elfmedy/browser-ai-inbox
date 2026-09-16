@@ -6,6 +6,9 @@ import { canonicalizeImages } from '../render/markdown';
 import { Snapshot, stableJson, type SnapshotData } from '../core/schema';
 import { ProbeError } from '../shared/errors';
 import type { CaptureState } from './inbox-types';
+import { conversationLocation, type ConversationLocation } from '../shared/providers';
+import { assertDomReady, loadDomHistory, readDomConversation, type DomProvider } from '../capture/dom-providers';
+import { downloadDomImage } from '../assets/dom-image';
 
 const previous = globalThis.aiInboxCapture;
 if (!previous || ['success', 'error'].includes(previous.stage) || Date.now() - previous.started > 15 * 60 * 1000) {
@@ -17,9 +20,10 @@ if (!previous || ['success', 'error'].includes(previous.stage) || Date.now() - p
   setTimeout(() => { if (globalThis.aiInboxCapture === state) globalThis.aiInboxCapture = undefined; state.bytes = {}; delete state.snapshot; }, 15 * 60 * 1000);
 }
 async function capture(state: CaptureState) {
-  const match = /^https:\/\/chatgpt\.com\/c\/([A-Za-z0-9-]+)\/?$/.exec(state.pageUrl);
-  if (!match) throw new ProbeError('UNSUPPORTED_PAGE', 'Open an ordinary ChatGPT conversation');
-  const id = match[1]!;
+  const source = conversationLocation(state.pageUrl);
+  if (source && source.provider !== 'chatgpt') return captureDom(state, source);
+  if (!source) throw new ProbeError('UNSUPPORTED_PAGE', 'Open a supported conversation');
+  const id = source.id;
   const visibleIds = () => Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role]'), node => node.dataset.messageId ?? '');
   const initialVisible = visibleIds();
   const checkPage = () => {
@@ -86,5 +90,43 @@ async function capture(state: CaptureState) {
     messages: expanded.map(message => ({ ...message, parts: message.parts.map(part => part.type === 'text'
       ? { type: 'text', text: canonicalizeImages(part.text, digests) }
       : { type: 'image', sha256: digests.get(part.pointer), ...(part.alt ? { alt: part.alt } : {}) }) })), assets });
+  state.stage = 'success';
+}
+
+async function captureDom(state: CaptureState, source: ConversationLocation) {
+  const provider = source.provider as DomProvider;
+  const includeThinking = globalThis.aiInboxCaptureOptions?.includeThinking === true;
+  state.diagnostics = { adapterVersion: 2, provider, phase: 'reading', httpStatus: null, requestCode: null, validation: null };
+  const check = () => {
+    if (location.href !== state.pageUrl) throw new ProbeError('SOURCE_CHANGED', 'Conversation changed');
+    if (Date.now() - state.started > 14 * 60 * 1000) throw new ProbeError('CAPTURE_TIMEOUT', 'Capture timed out');
+    assertDomReady(document, provider);
+  };
+  await loadDomHistory(document, provider, check);
+  const messages = readDomConversation(document, provider, includeThinking);
+  state.diagnostics.dom = { messages: messages.length, history: 'settled-at-top' };
+  const title = document.title.replace(/\s*[-|]\s*(?:Google Gemini|Gemini|Claude)$/, '').slice(0, 512);
+  const manifest = imageManifest(messages); const digests = new Map<string, string>();
+  if (manifest.length > 1000) throw new ProbeError('LIMIT_EXCEEDED', 'Too many images');
+  state.stage = 'images'; state.count = 0; state.total = manifest.length;
+  let total = 0; const assets: SnapshotData['assets'] = [];
+  for (const image of manifest) {
+    check(); const downloaded = await downloadDomImage(image.reference, location.origin);
+    const bitmap = await createImageBitmap(new Blob([downloaded.bytes.slice().buffer], { type: downloaded.mime })); bitmap.close();
+    const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', downloaded.bytes.slice().buffer)), byte => byte.toString(16).padStart(2, '0')).join('');
+    digests.set(image.reference, sha256);
+    if (!state.bytes[sha256]) {
+      total += downloaded.bytes.length; if (total > 250 * 1024 * 1024) throw new ProbeError('LIMIT_EXCEEDED', 'Images exceed total budget');
+      state.bytes[sha256] = downloaded.bytes; assets.push({ sha256, mime: downloaded.mime, byteLength: downloaded.bytes.length });
+    }
+    state.count++;
+  }
+  state.stage = 'checking'; state.diagnostics.phase = 'checking'; check();
+  if (stableJson(readDomConversation(document, provider, includeThinking)) !== stableJson(messages) ||
+    document.title.replace(/\s*[-|]\s*(?:Google Gemini|Gemini|Claude)$/, '').slice(0, 512) !== title) throw new ProbeError('SOURCE_CHANGED', 'Conversation changed while downloading images');
+  state.snapshot = Snapshot.parse({ schemaVersion: 1, provider, conversationId: source.id, sourceUrl: source.url, title, capturedAt: new Date().toISOString(),
+    messages: messages.map(message => ({ id: message.id, role: message.role, ...(message.sourceKind === 'thinking' ? { kind: 'thinking' } : {}),
+      parts: message.parts.map(part => part.type === 'text' ? { type: 'text', text: canonicalizeImages(part.text, digests) }
+        : { type: 'image', sha256: digests.get(part.pointer), alt: part.alt ?? '' }) })), assets });
   state.stage = 'success';
 }
