@@ -2,6 +2,9 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 import { domMarkdown } from '../src/capture/dom-markdown';
 import { loadDomHistory, readDomConversation } from '../src/capture/dom-providers';
+import { imageManifest, renderConversation } from '../src/render/conversation';
+import { inspectMarkdown } from '../src/render/markdown';
+import { fromMarkdown } from 'mdast-util-from-markdown';
 
 function page(html: string, provider = 'gemini') {
   return new JSDOM(html, { url: provider === 'gemini' ? 'https://gemini.google.com/app/test' : 'https://claude.ai/chat/test' }).window.document;
@@ -9,6 +12,30 @@ function page(html: string, provider = 'gemini') {
 const gemini = `<div id="chat-history"><div class="conversation-container" id="turn-1"><user-query><user-query-content><h5 class="cdk-visually-hidden">You said truncated</h5><p>Full prompt</p><button>Copy</button><img src="https://lh3.googleusercontent.com/fixture.png" alt="Upload"></user-query-content></user-query><model-response><message-content><p>Full answer <b>bold</b></p><table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table></message-content></model-response></div></div>`;
 const claude = `<div role="feed"><div role="article" aria-setsize="2" aria-posinset="1"><div data-testid="user-message"><p>Prompt</p></div></div><div role="article" aria-setsize="2" aria-posinset="2"><div class="font-claude-response"><div class="prose"><div class="standard-markdown"><p>Introduction</p></div></div><div data-testid="TurnStatus"><button aria-expanded="false">Searched web</button><p>Private tool log</p></div><div class="prose"><div class="standard-markdown"><p>Answer <a href="https://example.com/source">source</a></p><div role="group"><button>Copy</button><div>powershell</div><pre><code class="language-powershell">Write-Host 'test'\n</code></pre></div></div></div></div></div></div>`;
 describe('Gemini and Claude DOM adapters', () => {
+  it('saves Claude terminal errors containing HTML-looking text through manifest and note rendering', () => {
+    const html = claude.replace('<p>Prompt</p>', '<p>Shell error<br>+ ... anonymous"/&gt;&lt;script type="text/javascript"&gt;example() ...<br>+ ~<br>Final error line</p>');
+    const messages = readDomConversation(page(html, 'claude'), 'claude', false);
+    expect(messages).toHaveLength(2);
+    expect(() => imageManifest(messages)).not.toThrow();
+    const note = renderConversation({ title: 'Terminal error', sourceUrl: 'https://claude.ai/chat/test', messages, assets: new Map() });
+    expect(note).toContain('&lt;script type="text/javascript"&gt;example()');
+    expect(note).toContain('Final error line'); expect(note).toContain('Introduction');
+    expect(inspectMarkdown(note).images).toEqual([]);
+  });
+  it('preserves literal entities and angle brackets in prose without altering code or TeX', () => {
+    const literal = '<script>alert(1)</script> <img src="https://example.com/fake.png"> <!-- text --> &amp; &#60; &copy; > end';
+    const document = page('<div id="body"><p id="literal"></p><code>&lt;b&gt;&amp;amp;&lt;/b&gt;</code><pre><code class="language-html">&lt;script&gt;example()&lt;/script&gt;</code></pre><span class="katex"><math><semantics><annotation encoding="application/x-tex">a &lt; b</annotation></semantics></math></span></div>');
+    document.querySelector('#literal')!.textContent = literal;
+    const result = domMarkdown(document.querySelector('#body')!);
+    expect(inspectMarkdown(result).images).toEqual([]);
+    const paragraph = fromMarkdown(result).children[0]!;
+    expect(paragraph.type).toBe('paragraph');
+    if (paragraph.type !== 'paragraph') throw Error('Expected paragraph');
+    expect(paragraph.children).toEqual([expect.objectContaining({ type: 'text', value: literal })]);
+    expect(result).toContain('`<b>&amp;</b>`');
+    expect(result).toContain('```html\n<script>example()</script>\n```');
+    expect(result).toContain('$a < b$');
+  });
   it('reads the current Gemini container, complete collapsed prompt, images and table', () => {
     const messages = readDomConversation(page(gemini), 'gemini', false);
     expect(messages).toHaveLength(2);

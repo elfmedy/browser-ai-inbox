@@ -19,7 +19,7 @@ Gemini、Claude 支持普通文字和图片聊天；Canvas、Artifacts、非图�
 需要在同一台电脑上安装 **[AI Inbox Obsidian 插件](https://github.com/elfmedy/obsidian-ai-inbox/blob/main/README.zh-CN.md#安装)**，保存时保持 Obsidian 打开。当前为 Alpha，通过“加载已解压的扩展程序”安装，尚未上架浏览器商店。
 
 1. 通过 BRAT 安装并启用 Obsidian 插件：`elfmedy/obsidian-ai-inbox`。
-2. 从[最新 Release](https://github.com/elfmedy/browser-ai-inbox/releases/latest) 下载 **`ai-inbox-browser-0.5.0.zip`**，不要下载 GitHub 自动生成的 **Source code** ZIP。
+2. 从[最新 Release](https://github.com/elfmedy/browser-ai-inbox/releases/latest) 下载 **`ai-inbox-browser-0.5.1.zip`**，不要下载 GitHub 自动生成的 **Source code** ZIP。
 3. 解压到固定目录，解压后的 **`ai-inbox-browser`** 文件夹内应有 `manifest.json`。
 4. 打开浏览器的扩展管理页，启用 **开发者模式**：
 

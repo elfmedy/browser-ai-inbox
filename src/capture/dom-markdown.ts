@@ -14,6 +14,12 @@ export function domMarkdown(source: Element): string {
   });
   clone.querySelectorAll('script, style, button:not(:has(img)), [role="toolbar"], .sr-only, .cdk-visually-hidden, .katex-html').forEach(e => e.remove());
   const markdown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-', emDelimiter: '*', preformattedCode: true });
+  // DOM text such as a pasted terminal error may contain literal HTML syntax.
+  // Encode before Turndown's Markdown escaping (including ampersands so literal
+  // entity strings round-trip). Its escape hook excludes code; our TeX/code
+  // rules also read the original node text, so their source stays untouched.
+  const escapeMarkdown = markdown.escape.bind(markdown);
+  markdown.escape = text => escapeMarkdown(text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
   markdown.use(gfm);
   markdown.addRule('math', {
     filter: node => node.nodeType === 1 && (node as Element).matches('.katex, math'),

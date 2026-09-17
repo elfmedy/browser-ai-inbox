@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Inbox",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "minimum_chrome_version": "120",
   "description": "Save ChatGPT, Gemini, and Claude conversations and images to Obsidian with one click.",
   "permissions": [
