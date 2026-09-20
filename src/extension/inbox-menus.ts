@@ -1,3 +1,4 @@
+import { useChinese } from './inbox-language';
 /** Chrome create() returns an ID before creation completes. Use callbacks for
  * both mutations (also compatible with Chrome 120), and serialize the entire
  * rebuild across installation, startup, and preference-change events. */
@@ -9,7 +10,7 @@ function completed(resolve: () => void, reject: (error: Error) => void) {
 async function rebuild() {
   const stored = await chrome.storage.local.get('preferences');
   const prefs = stored.preferences as { language?: string; contextMenu?: boolean } | undefined;
-  const zh = prefs?.language === 'zh' || (prefs?.language !== 'en' && chrome.i18n.getUILanguage().startsWith('zh'));
+  const zh = useChinese(prefs?.language);
   await new Promise<void>((resolve, reject) => { chrome.contextMenus.removeAll(() => completed(resolve, reject)); });
   const items: chrome.contextMenus.CreateProperties[] = [
     { id: 'settings', title: zh ? '切换仓库 / 设置' : 'Switch vault / Settings', contexts: ['action'] },

@@ -6,6 +6,7 @@ import { summarizeResponseShape } from '../src/capture/response-shape';
 
 const pageUrl = 'https://chatgpt.com/c/synthetic-conversation';
 const api = 'https://chatgpt.com/backend-api/conversation/synthetic-conversation';
+const pluralApi = api.replace('/conversation/', '/conversations/') + '?include_has_versions=true&num_turns=100';
 const sessionUrl = 'https://chatgpt.com/api/auth/session';
 const resource = (name: string) => ({ name, initiatorType: 'fetch' });
 const session = { user: { id: 'private-user' }, expires: '2099-01-01', accessToken: 'private-session-credential' };
@@ -16,6 +17,19 @@ function json(data: unknown, url: string, status = 200) {
 }
 
 describe('observed current-chat request probe', () => {
+  it('explains missing and filtered requests without leaking URLs, IDs or query parameters', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(makeGraph(), pluralApi));
+    const result = await probeObservedRequest({ pageUrl, scripts: [], resources: [
+      resource(api + '?private-secret=private-value'), resource(api + '-private-other'),
+      resource(api + '/private-subroute'), resource(sessionUrl),
+    ] }, fetcher);
+    expect(result.diagnostics.discovery).toEqual({ resourceEntries: 4, fetchEntries: 4, currentChatRouteEntries: 1,
+      recognizedRequests: 0, rejectedQueryEntries: 1, otherConversationEntries: 1,
+      unknownConversationRouteEntries: 1, sessionRequestObserved: true });
+    expect(result.diagnostics.error).toBeNull();
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([pluralApi]);
+    expect(JSON.stringify(result.diagnostics)).not.toMatch(/private|synthetic-conversation|https:/);
+  });
   it('adapts the observed message-array envelope without requiring a mapping graph', async () => {
     const graph = makeGraph();
     const data = { conversation_id: 'synthetic-conversation', current_node: 'm3',
@@ -85,11 +99,13 @@ describe('observed current-chat request probe', () => {
     expect(JSON.stringify(shape)).not.toContain('private-');
     expect(JSON.stringify(shape)).not.toContain('synthetic-conversation');
   });
-  it('never invents requests if the resource timeline contains no current-chat request', async () => {
-    const fetcher = vi.fn<typeof fetch>();
+  it('reads the current chat through the known route when the timeline is empty', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(makeGraph(), pluralApi));
     const result = await probeObservedRequest({ pageUrl, resources: [], scripts: [] }, fetcher);
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(result.diagnostics.error).toBe('CURRENT_CHAT_REQUEST_NOT_OBSERVED');
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([pluralApi]);
+    expect(result.diagnostics.error).toBeNull();
+    expect(result.graphs).toHaveLength(1);
+    expect(result.diagnostics.selection).toMatchObject({ source: 'known-route', route: 'plural' });
   });
   it('ignores other conversations, foreign origins, userinfo, query strings and non-fetch resources', () => {
     const resources = [resource(`${api}-other`), resource(api.replace('chatgpt.com', 'evil.test')),
@@ -97,12 +113,12 @@ describe('observed current-chat request probe', () => {
       resource(`${api}?token=private`), { name: api, initiatorType: 'img' }, resource(pageUrl)];
     expect(discoverRequests(resources, pageUrl).conversations).toEqual([]);
   });
-  it('deduplicates repeated requests and rejects ambiguous routes', async () => {
+  it('deduplicates repeated requests and selects the preferred observed route', async () => {
     expect(discoverRequests([resource(api), resource(api)], pageUrl).conversations).toEqual([api]);
-    const fetcher = vi.fn<typeof fetch>();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(makeGraph(), api));
     const result = await probeObservedRequest({ pageUrl, resources: [resource(api), resource(api.replace('/conversation/', '/f/conversation/'))], scripts: [] }, fetcher);
-    expect(result.diagnostics.error).toBe('AMBIGUOUS_CHAT_REQUESTS');
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(result.diagnostics.error).toBeNull();
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([api]);
   });
   it('reads a matching graph with an in-memory page session and reports no credential or chat identifiers', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(makeGraph(), api));
@@ -124,14 +140,49 @@ describe('observed current-chat request probe', () => {
     expect(result.diagnostics.httpStatus).toBe(200);
     expect(result.graphs).toHaveLength(1);
   });
-  it('does not guess a session URL or retry forbidden responses', async () => {
-    for (const status of [401, 403]) {
-      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({}, api, status));
-      const result = await probeObservedRequest({ pageUrl, resources: [resource(api)], scripts: [] }, fetcher);
-      expect(fetcher).toHaveBeenCalledTimes(1);
-      expect(result.graphs).toEqual([]);
-      expect(result.diagnostics.httpStatus).toBe(status);
-    }
+  it.each([403, 429, 500])('does not try another route or session after HTTP %s', async status => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json({}, api, status));
+    const result = await probeObservedRequest({ pageUrl, resources: [resource(api)], scripts: [] }, fetcher);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.graphs).toEqual([]);
+    expect(result.diagnostics.httpStatus).toBe(status);
+  });
+  it('obtains a session without an observed session request and retries only once', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json({}, pluralApi, 401))
+      .mockResolvedValueOnce(json(session, sessionUrl)).mockResolvedValueOnce(json({}, pluralApi, 401));
+    const result = await probeObservedRequest({ pageUrl, resources: [], scripts: [] }, fetcher);
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([pluralApi, sessionUrl, pluralApi]);
+    expect(result.diagnostics.authSource).toBe('known-session');
+    expect(result.diagnostics.error).toBe('CURRENT_CHAT_API_FAILED');
+    expect(JSON.stringify(result.diagnostics)).not.toMatch(/private|https:|synthetic-conversation/);
+  });
+  it('falls back to the legacy route only after a 404', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json({}, pluralApi, 404)).mockResolvedValueOnce(json(makeGraph(), api));
+    const result = await probeObservedRequest({ pageUrl, resources: [], scripts: [] }, fetcher);
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([pluralApi, api]);
+    expect(result.diagnostics.error).toBeNull();
+    expect(result.diagnostics.selection.attempts).toEqual([{ route: 'plural', status: 404 }, { route: 'legacy', status: 200 }]);
+  });
+  it.each([false, true])('prefers the plural route and stable parameters regardless of observation order (%s)', async reverse => {
+    const small = pluralApi.replace('100', '10');
+    const resources = [resource(api), resource(small), resource(pluralApi)];
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(makeGraph(), pluralApi));
+    const result = await probeObservedRequest({ pageUrl, resources: reverse ? resources.reverse() : resources, scripts: [] }, fetcher);
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual([pluralApi]);
+    expect(result.diagnostics.error).toBeNull();
+    expect(result.diagnostics.discovery.recognizedRequests).toBe(3);
+  });
+  it('does not hide invalid response identity by trying a second route', async () => {
+    const graph = makeGraph(); graph.conversation_id = 'other-chat';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(graph, pluralApi));
+    const result = await probeObservedRequest({ pageUrl, resources: [], scripts: [] }, fetcher);
+    expect(result.diagnostics.error).toBe('CURRENT_CHAT_API_NO_GRAPH');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it.each(['https://evil.test/c/id', 'https://user@chatgpt.com/c/id', 'https://chatgpt.com/', 'https://chatgpt.com/share/id'])('never requests a route for unsupported page %s', async pageUrl => {
+    const fetcher = vi.fn<typeof fetch>();
+    await expect(probeObservedRequest({ pageUrl, resources: [], scripts: [] }, fetcher)).rejects.toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
   });
   it('rejects another conversation graph even if delivered from the expected URL', async () => {
     const graph = makeGraph();

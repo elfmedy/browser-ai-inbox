@@ -8,7 +8,7 @@ import { receiver } from './inbox-connection';
 import { selectVault, vaultOverview } from './inbox-vaults';
 import { jobStore, queuedFor } from './inbox-storage';
 import type { Connection, Feedback, Job } from './inbox-types';
-import { CaptureFailure } from './inbox-types';
+import { CaptureFailure, VaultUnavailableFailure } from './inbox-types';
 
 const busy = new Set<number>();
 const conversationBusy = new Set<string>();
@@ -147,7 +147,9 @@ async function save(tab: chrome.tabs.Tab) {
     const code = error instanceof ProbeError ? error.code : connected ? 'CONNECTION_OR_SAVE_FAILED' : 'OBSIDIAN_UNAVAILABLE';
     // These codes explicitly certify that no note commit took place.
     if (['REVISION_CONFLICT', 'REPLAN_REQUIRED', 'SNAPSHOT_INVALID', 'ASSET_MANIFEST_MISMATCH', 'EXPORT_SETTINGS_CHANGED', 'EXTENSION_UPDATE_REQUIRED'].includes(code)) await jobStore(queued?.tabId ?? tabId, 'delete').catch(() => undefined);
-    const details = error instanceof CaptureFailure ? { notSubmitted: true, ...(error.diagnostics ? { diagnostics: error.diagnostics } : {}) } : {};
+    const details = error instanceof VaultUnavailableFailure
+      ? { notSubmitted: true, defaultVaultName: error.defaultVaultName, availableVaultNames: error.availableVaultNames }
+      : error instanceof CaptureFailure ? { notSubmitted: true, ...(error.diagnostics ? { diagnostics: error.diagnostics } : {}) } : {};
     await feedback(tabId, { stage: 'error', code, ...details }, !began && code !== 'CONNECTION_REQUIRED').catch(() => undefined);
     // Finish feedback while the chat is still active. Opening the chooser
     // first can suspend injection into the background tab and retain its lock.
@@ -162,6 +164,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {
   if (sender.id !== chrome.runtime.id || typeof message !== 'object' || !message) return;
+  if ('type' in message && message.type === 'open-vault-settings') {
+    void chrome.runtime.openOptionsPage(); reply({ accepted: true }); return;
+  }
   if ('type' in message && message.type === 'retry' && 'tabId' in message && typeof message.tabId === 'number') {
     void chrome.tabs.get(message.tabId).then(save).catch(() => undefined); reply({ accepted: true });
   }

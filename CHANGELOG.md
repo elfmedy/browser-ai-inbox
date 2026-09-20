@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2
+
+- Save ChatGPT conversations when request records are missing or contain multiple matching routes; retain identity, branch and pagination validation.
+- Name unavailable default vaults, list connectable alternatives and add a switch-vault action. Clarify per-vault plugin installation.
+- Unify browser language selection and explain how to save from a new-chat page.
+- Add redacted request-selection and source-change diagnostics.
+
 ## 0.4.0
 
 - First independent browser release for Chrome and Microsoft Edge.

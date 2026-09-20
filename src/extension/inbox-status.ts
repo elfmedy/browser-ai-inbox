@@ -1,3 +1,4 @@
+import { useChinese } from './inbox-language';
 import type { Feedback } from './inbox-types';
 import { feedbackText } from './inbox-text';
 import { diagnosticText } from './inbox-diagnostics';
@@ -7,7 +8,7 @@ const key = hasTab ? `status:${tabId}` : 'lastStatus';
 async function display() {
   const stored = await chrome.storage.local.get([key, 'preferences']);
   const lang = (stored.preferences as { language?: string } | undefined)?.language;
-  const zh = lang === 'zh' || (lang !== 'en' && chrome.i18n.getUILanguage().startsWith('zh'));
+  const zh = useChinese(lang);
   const data = stored[key] as Feedback | undefined;
   const copy = document.getElementById('copy') as HTMLButtonElement; copy.hidden = data?.stage !== 'error';
   copy.textContent = zh ? '复制诊断' : 'Copy diagnostics';
@@ -17,7 +18,8 @@ async function display() {
   copy.onclick = () => { if (data) void navigator.clipboard.writeText(diagnosticText(data, chrome.runtime.getManifest().version))
     .then(() => { copy.textContent = zh ? '已复制' : 'Copied'; }).catch(() => { copy.textContent = zh ? '请展开诊断详情手动复制' : 'Copy the details below manually'; }); };
   document.getElementById('heading')!.textContent = zh ? '最近保存状态' : 'Last save status';
-  document.getElementById('settings')!.textContent = zh ? '设置' : 'Settings';
+  document.getElementById('settings')!.textContent = data?.code === 'DEFAULT_VAULT_UNAVAILABLE'
+    ? (zh ? '切换仓库' : 'Switch vault') : (zh ? '设置' : 'Settings');
   document.getElementById('result')!.textContent = data ? feedbackText(data, zh) : zh ? '尚无保存记录' : 'No saves yet';
   document.getElementById('code')!.textContent = data?.code ?? '';
   const retry = document.getElementById('retry') as HTMLButtonElement; retry.textContent = zh ? '重试' : 'Retry'; retry.hidden = !hasTab || data?.stage !== 'error';

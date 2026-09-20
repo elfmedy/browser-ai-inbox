@@ -1,3 +1,4 @@
+import { useChinese } from './inbox-language';
 import { z } from 'zod';
 import type { Preferences } from './inbox-types';
 import { feedbackText } from './inbox-text';
@@ -9,20 +10,20 @@ const Failure = z.object({ ok: z.literal(false), code: z.string() });
 let overview: z.infer<typeof Overview> | undefined; let busy = false; let zh = true;
 let result: { kind: 'connected'; name: string } | { kind: 'error'; code: string } | { kind: 'pairing'; code: string; name: string } | undefined;
 function translate() {
-  zh = language.value === 'zh' || (language.value !== 'en' && chrome.i18n.getUILanguage().startsWith('zh'));
+  zh = useChinese(language.value);
   document.documentElement.lang = zh ? 'zh-CN' : 'en';
   const text: Record<string, [string, string]> = {
-    heading: ['聊天，归入你的笔记。', 'Your conversations, at home.'], intro: ['选择一个运行中的 Obsidian 仓库。首次连接只需确认一次。', 'Choose a running Obsidian vault. Confirm once to connect.'],
+    heading: ['聊天，归入你的笔记。', 'Your conversations, at home.'], intro: ['仅列出已打开且已安装、启用 AI Inbox 的 Obsidian 仓库。首次连接只需确认一次。', 'Only open Obsidian vaults with AI Inbox installed and enabled are listed. Confirm once to connect.'],
     'default-label': ['默认保存到', 'DEFAULT DESTINATION'], 'available-label': ['可用仓库', 'Available vaults'], refresh: ['刷新', 'Refresh'],
     'language-label': ['语言', 'Language'], 'context-label': ['在聊天页面右键菜单中显示保存', 'Show Save in the chat page context menu'],
-    hint: ['选择其他仓库后，它就成为默认。日常点击工具栏图标即可保存。', 'Choosing a vault makes it your default. Click the toolbar icon to save.'],
+    hint: ['找不到已打开的仓库？请在该仓库单独安装并启用 AI Inbox，再点击刷新。选择后它将成为默认保存仓库。', 'Missing an open vault? Install and enable AI Inbox in that vault, then refresh. Selecting a vault makes it your default.'],
     'shortcut-hint': ['请保持目标仓库打开。快捷键可在 浏览器扩展的「键盘快捷键」中设置。', 'Keep the target vault open. Set an optional shortcut in your browser’s Extensions → Keyboard shortcuts.'],
     'status-link': ['最近保存状态', 'Last save status'],
   };
   for (const [id, values] of Object.entries(text)) element(id).textContent = values[zh ? 0 : 1];
   element('current-vault').textContent = overview?.defaultName || (overview?.defaultId ? (zh ? '已连接的仓库' : 'Connected vault') : (zh ? '尚未选择' : 'No vault selected'));
   const defaultId = overview?.defaultId; const online = overview?.vaults.some(vault => vault.vaultId === defaultId);
-  element('availability').textContent = overview?.defaultId ? (online ? (zh ? '可接收当前聊天' : 'Ready to receive your conversation') : (zh ? '当前不可用，请打开此仓库' : 'Unavailable. Open this vault to save.'))
+  element('availability').textContent = overview?.defaultId ? (online ? (zh ? '可接收当前聊天' : 'Ready to receive your conversation') : (zh ? '当前不可用，请打开此仓库并确认已安装、启用 AI Inbox' : 'Unavailable. Open this vault and ensure AI Inbox is installed and enabled.'))
     : (zh ? '首次选择后自动记住' : 'Your first selection will be remembered');
   const list = element('vault-list'); list.replaceChildren();
   for (const vault of overview?.vaults ?? []) {
@@ -33,7 +34,7 @@ function translate() {
     button.append(name, state); button.onclick = () => { void select(vault.vaultId); }; list.append(button);
   }
   if (overview && !overview.vaults.length) { const empty = document.createElement('p'); empty.className = 'secondary';
-    empty.textContent = zh ? '未发现可用仓库。请打开 Obsidian，并启用 AI Inbox 插件。' : 'No vault found. Open Obsidian and enable the AI Inbox plugin.'; list.append(empty); }
+    empty.textContent = zh ? '未发现可连接的仓库。请打开目标仓库，并在该仓库安装、启用 AI Inbox 插件，然后点击刷新。' : 'No connectable vault found. Open the target vault, install and enable AI Inbox in that vault, then refresh.'; list.append(empty); }
   element<HTMLButtonElement>('refresh').disabled = busy;
   element('result').textContent = !result ? '' : result.kind === 'connected' ? (zh ? `已设为默认：${result.name}。返回聊天即可保存。` : `Default vault: ${result.name}. Return to your chat to save.`)
     : result.kind === 'pairing' ? feedbackText({ stage: 'pairing', pairCode: result.code, vaultName: result.name }, zh) : feedbackText({ stage: 'error', code: result.code }, zh);

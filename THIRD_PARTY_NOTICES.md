@@ -16,6 +16,11 @@ Their notices apply to those portions; original authorship is not reassigned.
   boundaries, overlap, size and progress checks; final head reread; no bulk export
   or raw JSON download; assembled coverage derived from validated page boundaries.
 - Full license: `third-party/chatgpt-conversation-export.LICENSE`.
+- Current-chat request selection also follows the same pinned `extension/popup.js`
+  plural-route, session and legacy-404 fallback contract. AI Inbox retains observed
+  routes when available, uses deterministic selection for multiple observations,
+  refreshes the in-memory session at most once after 401, and preserves its own
+  strict identity, branch, completeness and bounded-request validation.
 
 ## chatgpt-exporter
 

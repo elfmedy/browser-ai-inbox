@@ -9,6 +9,7 @@ import type { CaptureState } from './inbox-types';
 import { conversationLocation, type ConversationLocation } from '../shared/providers';
 import { assertDomReady, loadDomHistory, readDomConversation, type DomProvider } from '../capture/dom-providers';
 import { downloadDomImage } from '../assets/dom-image';
+import { pageChange } from '../capture/source-change';
 
 const previous = globalThis.aiInboxCapture;
 if (!previous || ['success', 'error'].includes(previous.stage) || Date.now() - previous.started > 15 * 60 * 1000) {
@@ -26,20 +27,34 @@ async function capture(state: CaptureState) {
   const id = source.id;
   const visibleIds = () => Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role]'), node => node.dataset.messageId ?? '');
   const initialVisible = visibleIds();
+  state.diagnostics = { adapterVersion: 2, phase: 'reading', httpStatus: null, requestCode: null, validation: null };
+  const changed = (change: NonNullable<NonNullable<CaptureState['diagnostics']>['sourceChange']>) => {
+    if (state.diagnostics) state.diagnostics.sourceChange = change;
+    throw new ProbeError('SOURCE_CHANGED', 'Conversation changed');
+  };
   const checkPage = () => {
-    if (location.href !== state.pageUrl || stableJson(visibleIds()) !== stableJson(initialVisible)) throw new ProbeError('SOURCE_CHANGED', 'Conversation changed');
+    const change = pageChange(state.pageUrl, location.href, initialVisible, visibleIds());
+    if (change) changed({ ...change, stage: state.stage, elapsedMs: Date.now() - state.started });
     if (document.querySelector('[data-testid="stop-button"]')) throw new ProbeError('SOURCE_GENERATING', 'Reply is unfinished');
     if (Date.now() - state.started > 14 * 60 * 1000) throw new ProbeError('CAPTURE_TIMEOUT', 'Capture timed out');
   };
   checkPage();
   const includeThinking = globalThis.aiInboxCaptureOptions?.includeThinking === true;
-  const request = () => probeObservedRequest({ pageUrl: state.pageUrl, enableToolImages: true, includeThinking,
+  let pageDiagnostics: NonNullable<CaptureState['diagnostics']>['page'];
+  const request = () => {
+    pageDiagnostics = { readyState: document.readyState, ageMs: Math.round(performance.now()), visibility: document.visibilityState,
+      visibleMessages: visibleIds().length, navigationType: (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type ?? 'unknown' };
+    return probeObservedRequest({ pageUrl: state.pageUrl, enableToolImages: true, includeThinking,
     scripts: Array.from(document.scripts, script => script.textContent ?? ''),
     resources: performance.getEntriesByType('resource').filter((entry): entry is PerformanceResourceTiming => entry instanceof PerformanceResourceTiming)
       .map(entry => ({ name: entry.name, initiatorType: entry.initiatorType })),
-  });
+    });
+  };
   const sourceMessages = (result: Awaited<ReturnType<typeof request>>, phase: 'reading' | 'checking' = 'reading'): GraphMessage[] => {
     state.diagnostics = { adapterVersion: 2, phase, httpStatus: result.diagnostics.httpStatus,
+      discovery: result.diagnostics.discovery, ...(pageDiagnostics ? { page: pageDiagnostics } : {}),
+      request: { selection: result.diagnostics.selection, authSource: result.diagnostics.authSource,
+        sessionHttpStatus: result.diagnostics.sessionHttpStatus, requestedTurnLimit: result.diagnostics.requestedTurnLimit, pagination: result.diagnostics.pagination },
       requestCode: result.diagnostics.error, validation: result.messageList?.diagnostics ?? null };
     if (result.diagnostics.error) {
       const code = result.diagnostics.error === 'CURRENT_CHAT_MESSAGE_ARRAY_UNVERIFIED'
@@ -83,7 +98,8 @@ async function capture(state: CaptureState) {
   }
   state.stage = 'checking'; checkPage();
   const final = await request();
-  if (stableJson(sourceMessages(final, 'checking')) !== stableJson(messages) || final.sourceTitle !== first.sourceTitle) throw new ProbeError('SOURCE_CHANGED', 'Source changed during image download');
+  const contentChanged = stableJson(sourceMessages(final, 'checking')) !== stableJson(messages);
+  if (contentChanged || final.sourceTitle !== first.sourceTitle) changed({ reason: contentChanged ? 'response-content' : 'response-title', stage: state.stage, elapsedMs: Date.now() - state.started });
   checkPage();
   state.snapshot = Snapshot.parse({ schemaVersion: 1, conversationId: id, sourceUrl: `https://chatgpt.com/c/${id}`,
     title: first.sourceTitle || document.title.replace(/\s*[-|]\s*ChatGPT$/, ''), capturedAt: new Date().toISOString(),

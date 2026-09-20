@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Connection } from './inbox-types';
+import { VaultUnavailableFailure } from './inbox-types';
 import { parseConnection, receiver } from './inbox-connection';
 import { discoverVaults, discoveryRequest, chooseVault, type DiscoveredVault } from './inbox-discovery';
 import { ProbeError } from '../shared/errors';
@@ -56,9 +57,15 @@ export async function selectVault(vaultId: string | undefined, progress: (value:
   if (selecting) throw new ProbeError('PAIRING_BUSY', 'A connection is in progress');
   selecting = true;
   try {
-    const stored = await chrome.storage.local.get('connection');
+    const stored = await chrome.storage.local.get(['connection', 'defaultVaultName', 'connections']);
     const defaultId = vaultId ?? (stored.connection ? parseConnection(stored.connection).vaultId : undefined);
-    return await connect(chooseVault(await discoverVaults(), defaultId), progress);
+    const vaults = await discoverVaults();
+    if (defaultId && !vaults.some(vault => vault.vaultId === defaultId)) {
+      const known = (stored.connections as Record<string, KnownVault> | undefined)?.[defaultId];
+      const name = known?.vaultName ?? (!vaultId && typeof stored.defaultVaultName === 'string' ? stored.defaultVaultName : '');
+      throw new VaultUnavailableFailure(name, vaults.map(vault => vault.vaultName));
+    }
+    return await connect(chooseVault(vaults, defaultId), progress);
   } finally { selecting = false; await chrome.storage.local.remove('pairingStatus'); }
 }
 export async function vaultOverview() {

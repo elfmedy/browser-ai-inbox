@@ -1,3 +1,4 @@
+import { useChinese } from './inbox-language';
 import type { Feedback } from './inbox-types';
 import { feedbackText } from './inbox-text';
 import { diagnosticText } from './inbox-diagnostics';
@@ -25,7 +26,7 @@ if (!globalThis.aiInboxCardInstalled) {
     const data = message.data;
     if (data.pageUrl && data.pageUrl !== location.href) { dismiss(); return; }
     pageUrl = data.pageUrl ?? location.href;
-    const zh = message.language === 'zh' || (message.language !== 'en' && navigator.language.startsWith('zh'));
+    const zh = useChinese(message.language);
     root.querySelector('section')?.remove(); const section = document.createElement('section');
     section.setAttribute('role', data.stage === 'error' ? 'alert' : 'status'); section.setAttribute('aria-live', 'polite');
     const header = document.createElement('header'); const title = document.createElement('strong'); title.textContent = 'AI Inbox';
@@ -40,6 +41,11 @@ if (!globalThis.aiInboxCardInstalled) {
           .then(() => { copy.textContent = zh ? '已复制' : 'Copied'; })
           .catch(() => { copy.textContent = zh ? '复制失败，请从扩展最近状态页复制' : 'Copy from the extension status page'; });
       };
+      if (data.code === 'DEFAULT_VAULT_UNAVAILABLE') {
+        const settings = document.createElement('button'); settings.textContent = zh ? '切换仓库' : 'Switch vault';
+        settings.onclick = () => { void chrome.runtime.sendMessage({ type: 'open-vault-settings' }); };
+        nav.append(settings);
+      }
       nav.append(copy); section.append(nav);
     }
     if (data.stage === 'success' && data.receipt && data.vaultName) {

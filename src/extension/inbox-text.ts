@@ -6,8 +6,7 @@ const errors: Record<string, [string, string]> = {
   RICH_CONTENT_UNSUPPORTED: ['此聊天含暂不支持的 Canvas、Artifact 或其他交互内容，本次未提交笔记。', 'This chat contains an unsupported Canvas, Artifact, or interactive content. No note was submitted.'],
   ATTACHMENT_FORMAT_UNSUPPORTED: ['此聊天含暂不支持的非图片附件，本次未提交笔记。', 'This chat contains an unsupported non-image attachment. No note was submitted.'],
   MATH_FORMAT_UNSUPPORTED: ['无法读取公式原文，本次未提交笔记。', 'The formula source is unavailable. No note was submitted.'],
-  OBSIDIAN_UNAVAILABLE: ['无法连接 Obsidian。请先打开目标仓库并启用 AI Inbox，再重新保存。', 'Cannot connect to Obsidian. Open the target vault and enable AI Inbox, then save again.'],
-  DEFAULT_VAULT_UNAVAILABLE: ['默认仓库未运行或 AI Inbox 未启用，本次保存失败。打开默认仓库后重试，或右键扩展图标切换仓库。', 'The default vault is unavailable. Open it and enable AI Inbox, or right-click the extension to switch vaults.'],
+  OBSIDIAN_UNAVAILABLE: ['无法连接 Obsidian。请先打开目标仓库，并在该仓库安装、启用 AI Inbox，再重新保存。', 'Cannot connect to Obsidian. Open the target vault and install and enable AI Inbox there, then save again.'],
   VAULT_SELECTION_REQUIRED: ['已发现多个仓库，请选择保存到哪个仓库。选择后它将成为默认仓库。', 'Multiple vaults found. Select a destination; it becomes your default vault.'],
   VAULT_ID_AMBIGUOUS: ['多个运行中的仓库使用了相同身份，请检查复制的插件数据后重试。', 'Multiple running vaults share one identity. Check copied plugin data before retrying.'],
   PAIRING_BUSY: ['另一项连接确认正在进行，请完成后再试。', 'Another connection is in progress. Complete it before retrying.'],
@@ -26,13 +25,14 @@ const errors: Record<string, [string, string]> = {
   CONNECTION_REQUIRED: ['请先在扩展设置中连接 Obsidian。', 'Connect Obsidian in extension settings first.'],
   CONNECTION_INVALID: ['连接信息无效，请在扩展设置中重新选择仓库配对。', 'Select the vault in extension settings to pair again.'],
   UNAUTHORIZED: ['连接已失效，请在扩展设置中重新选择仓库配对。', 'Connection expired. Select the vault in settings to pair again.'],
-  CURRENT_CHAT_REQUEST_NOT_OBSERVED: ['请刷新此聊天页面，等待加载完成后再点击保存。', 'Reload this chat, wait until loaded, then save again.'],
+  CURRENT_CHAT_REQUEST_NOT_OBSERVED: ['尚未找到当前对话的数据请求，本次未提交笔记。请先复制诊断，再等待几秒重试；若仍失败，请刷新页面、等待加载完成后重试。', 'The current conversation data request was not found. No note was submitted. Copy diagnostics, then wait a few seconds and retry. If it still fails, reload the page, wait for it to load, and retry.'],
+  CURRENT_CHAT_API_FAILED: ['读取当前对话失败，本次未提交笔记。请复制诊断，其中包含接口返回的状态码。', 'Could not read the current conversation. No note was submitted. Copy diagnostics for the response status.'],
   EXPORT_SETTINGS_CHANGED: ['Obsidian 的保存设置已变化，本次未写入笔记。请再次点击保存。', 'Obsidian export settings changed. No note was written. Click Save again.'],
   PLUGIN_UPDATE_REQUIRED: ['请将 Obsidian 的 AI Inbox 插件更新至 0.5.0 或更新版本。', 'Update the AI Inbox Obsidian plugin to 0.5.0 or later.'],
   EXTENSION_UPDATE_REQUIRED: ['请更新 浏览器扩展后重新保存，以应用思考内容设置。', 'Update the browser extension and save again to apply thinking settings.'],
   THINKING_FORMAT_UNSUPPORTED: ['当前思考内容格式暂不支持，本次未提交笔记。可关闭保存思考后重试。', 'This thinking format is unsupported. No note was submitted. Turn off thinking export to retry.'],
   SOURCE_GENERATING: ['请等待回复完成后再保存。', 'Wait until the reply finishes.'],
-  SOURCE_CHANGED: ['保存准备过程中聊天发生变化，请重新点击保存。', 'The conversation changed. Click Save again.'],
+  SOURCE_CHANGED: ['保存准备时检测到聊天页面或对话数据变化，本次未提交笔记。请先复制诊断，再等待页面稳定后重新保存。', 'The chat page or conversation data changed during preparation. No note was submitted. Copy diagnostics, then wait for the page to settle and save again.'],
   VISIBLE_CHAIN_NOT_CONFIRMED: ['无法确认当前分支。请刷新聊天并等待加载完成后重试。', 'Could not verify the selected branch. Reload the chat and retry.'],
   REVISION_CONFLICT: ['其他保存已完成，请再次点击保存以读取最新状态。', 'Another save completed. Click Save again to use the latest state.'],
   REPLAN_REQUIRED: ['本地笔记在写入前发生变化，内容已保护。请再次点击保存。', 'The local note changed before writing and was protected. Click Save again.'],
@@ -47,6 +47,17 @@ const errors: Record<string, [string, string]> = {
   LIMIT_EXCEEDED: ['当前聊天超过安全处理上限，未完成保存。', 'This chat exceeds a processing limit. Save did not complete.'],
 };
 export function feedbackText(data: Feedback, zh: boolean): string {
+  if (data.stage === 'error' && data.code === 'DEFAULT_VAULT_UNAVAILABLE') {
+    const name = data.defaultVaultName;
+    const target = zh ? (name ? `默认仓库「${name}」` : '默认仓库') : (name ? `default vault “${name}”` : 'default vault');
+    const available = data.availableVaultNames ?? [];
+    if (zh) return `无法连接${target}，本次未保存。\n` + (available.length
+      ? `检测到可连接的仓库：${available.map(value => `「${value}」`).join('、')}。请切换仓库，或打开${name ? `「${name}」` : '默认仓库'}并在其中安装、启用 AI Inbox。`
+      : `请确认${name ? `「${name}」` : '默认仓库'}已打开，并已在该仓库安装、启用 AI Inbox。`);
+    return `Cannot connect to the ${target}. Nothing was saved.\n` + (available.length
+      ? `Available vaults: ${available.map(value => `“${value}”`).join(', ')}. Switch vaults, or open the ${target} and install and enable AI Inbox in that vault.`
+      : `Open the ${target} and install and enable AI Inbox in that vault.`);
+  }
   if (data.stage === 'pairing') return zh ? `请在 Obsidian 中确认连接「${data.vaultName ?? ''}」。\n配对码：${data.pairCode ?? ''}`
     : `Confirm the connection to “${data.vaultName ?? ''}” in Obsidian.\nPairing code: ${data.pairCode ?? ''}`;
   if (data.stage === 'error') return errors[data.code ?? '']?.[zh ? 0 : 1] ?? (data.notSubmitted ? (zh

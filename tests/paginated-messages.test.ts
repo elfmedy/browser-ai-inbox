@@ -83,8 +83,8 @@ describe('upstream-based current-chat pagination', () => {
       .rejects.toMatchObject({ code: 'PAGINATION_LIMIT_EXCEEDED' });
     expect(reader).toHaveBeenCalledTimes(99);
   });
-  it('integrates only with the observed plural route, preserves page size and redacts diagnostics', async () => {
-    const api = 'https://chatgpt.com/backend-api/conversations/fixture?include_has_versions=true&num_turns=10';
+  it.each(['observed', 'missing', 'multiple'])('paginates and verifies the full history with %s request records', async mode => {
+    const api = 'https://chatgpt.com/backend-api/conversations/fixture?include_has_versions=true&num_turns=' + (mode === 'missing' ? '100' : '10');
     const responses = [initial(), page(0, 99, false, true), initial()];
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async input => {
       const response = new Response(JSON.stringify(responses.shift()), { headers: { 'Content-Type': 'application/json' } });
@@ -92,7 +92,8 @@ describe('upstream-based current-chat pagination', () => {
       return response;
     });
     const result = await probeObservedRequest({ pageUrl: 'https://chatgpt.com/c/fixture',
-      resources: [{ name: api, initiatorType: 'fetch' }], scripts: [] }, fetcher);
+      resources: mode === 'missing' ? [] : [{ name: api, initiatorType: 'fetch' },
+        ...(mode === 'multiple' ? [{ name: 'https://chatgpt.com/backend-api/conversation/fixture', initiatorType: 'fetch' }] : [])], scripts: [] }, fetcher);
     expect(fetcher.mock.calls.map(call => call[0])).toEqual([api, `${api}&before=m100`, api]);
     expect(result.diagnostics.error).toBeNull();
     expect(result.diagnostics.pagination).toEqual({ additionalRequests: 2, pages: 2, completed: true, headRechecked: true });
