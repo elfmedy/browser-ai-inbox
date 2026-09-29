@@ -13,6 +13,14 @@ function page(start: number, end: number, previous: boolean, next: boolean) {
 const initial = () => page(100, 199, true, false);
 
 describe('upstream-based current-chat pagination', () => {
+  it('accepts extra page metadata without using it as coverage or revision evidence', async () => {
+    const first = { ...initial(), page_info: { ...initial().page_info, metadata: 'initial' } };
+    const older = page(0, 99, false, true);
+    const refreshed = { ...initial(), page_info: { ...initial().page_info, metadata: 'refreshed' } };
+    const result = await collectPaginatedMessages(first, 'fixture', vi.fn().mockResolvedValueOnce(older).mockResolvedValueOnce(refreshed));
+    expect(result.records).toBe(200);
+    expect(messageListCoverage(result.data)).toBe('complete');
+  });
   it('assembles 200 records, preserves order, rechecks the head and leaves input untouched', async () => {
     const first = initial();
     const reader = vi.fn().mockResolvedValueOnce(page(0, 99, false, true)).mockResolvedValueOnce(first);

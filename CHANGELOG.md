@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3
+
+- Save validated ChatGPT API branches when page message attributes are unavailable; scrolling and partial DOM visibility no longer block capture.
+- Retain explicit branch-conflict checks and compare raw branch identities before submission. Accept extra pagination metadata while enforcing known coverage boundaries.
+- Add redacted DOM-witness and API-recheck diagnostics. API failures never silently fall back to partial DOM export.
+- ChatGPT 页面结构变化或仅显示部分消息时，仍可保存通过接口校验的分支；保留分支冲突、历史完整性及提交前变化检查，并补充脱敏诊断。
+
 ## 0.5.2
 
 - Save ChatGPT conversations when request records are missing or contain multiple matching routes; retain identity, branch and pagination validation.

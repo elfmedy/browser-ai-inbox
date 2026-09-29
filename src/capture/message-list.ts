@@ -14,8 +14,7 @@ export function messageListCoverage(input: unknown): PageCoverage {
   const page = input.page_info;
   if (typeof page.has_previous_page !== 'boolean' || typeof page.has_next_page !== 'boolean') return 'unknown';
   if (page.has_previous_page || page.has_next_page) return 'partial';
-  const known = ['has_previous_page', 'has_next_page', 'start_cursor', 'end_cursor'];
-  if (Object.keys(page).some(key => !known.includes(key))) return 'unknown';
+  // Additional metadata does not invalidate the known pagination boundaries.
   const first: unknown = input.messages[0];
   const last: unknown = input.messages.at(-1);
   if (typeof page.start_cursor !== 'string' || !page.start_cursor || typeof page.end_cursor !== 'string' || !page.end_cursor ||
@@ -69,5 +68,6 @@ export function inspectMessageList(input: unknown, expectedId: string, coverage:
   diagnostics.recognizedVisibleMessages = messages.length;
   if (messages.length === 0) reject('NO_VISIBLE_MESSAGES');
   diagnostics.validated = diagnostics.issues.length === 0;
-  return { diagnostics, thinkingIds, messages: diagnostics.validated ? messages : [] };
+  return { diagnostics, thinkingIds, messages: diagnostics.validated ? messages : [],
+    branch: diagnostics.validated ? { currentNode: source.current_node as string, messageIds: [...ids] } : null };
 }

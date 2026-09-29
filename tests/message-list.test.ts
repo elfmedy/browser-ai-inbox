@@ -18,7 +18,7 @@ describe('new message array adapter (synthetic coverage evidence)', () => {
     expect(messageListCoverage({ ...source, page_info: { ...source.page_info, end_cursor: 'm2' } })).toBe('unknown');
     expect(messageListCoverage({ ...source, current_node: 'm2' })).toBe('unknown');
     expect(messageListCoverage({ ...source, page_info: { ...source.page_info, has_next_page: null } })).toBe('unknown');
-    expect(messageListCoverage({ ...source, page_info: { ...source.page_info, unverified_flag: false } })).toBe('unknown');
+    expect(messageListCoverage({ ...source, page_info: { ...source.page_info, extra_metadata: { format: 2 } } })).toBe('complete');
     expect(messageListCoverage(fixture())).toBe('unknown');
   });
   it('preserves a 200-message sequence without fabricating graph edges', () => {
@@ -27,6 +27,8 @@ describe('new message array adapter (synthetic coverage evidence)', () => {
     expect(result.messages[0]?.id).toBe('m0');
     expect(result.messages.at(-1)?.id).toBe('m199');
     expect(result.diagnostics.validated).toBe(true);
+    expect(result.branch?.currentNode).toBe('m199');
+    expect(result.branch?.messageIds).toHaveLength(200);
   });
   it.each(['unknown', 'partial'] as const)('does not certify range with %s coverage', coverage => {
     const result = inspectMessageList(fixture(), 'synthetic-conversation', coverage);

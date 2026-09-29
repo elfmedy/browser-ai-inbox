@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **一键保存对话。** 保存当前 ChatGPT、Gemini 或 Claude 聊天分支的全部消息。
+- **一键保存对话。** 保存 ChatGPT 服务端返回分支、Gemini 或 Claude 当前聊天分支的全部消息。
 - **图片和引用一起带走。** 下载图片，将支持的引用转换为可阅读的链接。
 - **自动找到仓库。** 发现已运行的 Obsidian 仓库，首次确认连接后记住默认目标。
 - **保存结果看得见。** 页面内显示进度与结果；不支持的页面只显示工具栏小提示，不另开标签页。
@@ -19,7 +19,7 @@ Gemini、Claude 支持普通文字和图片聊天；Canvas、Artifacts、非图�
 需要在同一台电脑上安装 **[AI Inbox Obsidian 插件](https://github.com/elfmedy/obsidian-ai-inbox/blob/main/README.zh-CN.md#安装)**，保存时保持 Obsidian 打开。当前为 Alpha，通过“加载已解压的扩展程序”安装，尚未上架浏览器商店。
 
 1. 通过 BRAT 安装并启用 Obsidian 插件：`elfmedy/obsidian-ai-inbox`。
-2. 从[最新 Release](https://github.com/elfmedy/browser-ai-inbox/releases/latest) 下载 **`ai-inbox-browser-0.5.1.zip`**，不要下载 GitHub 自动生成的 **Source code** ZIP。
+2. 从[最新 Release](https://github.com/elfmedy/browser-ai-inbox/releases/latest) 下载 **`ai-inbox-browser-0.5.3.zip`**，不要下载 GitHub 自动生成的 **Source code** ZIP。
 3. 解压到固定目录，解压后的 **`ai-inbox-browser`** 文件夹内应有 `manifest.json`。
 4. 打开浏览器的扩展管理页，启用 **开发者模式**：
 

@@ -10,11 +10,12 @@ async function display() {
   const lang = (stored.preferences as { language?: string } | undefined)?.language;
   const zh = useChinese(lang);
   const data = stored[key] as Feedback | undefined;
-  const copy = document.getElementById('copy') as HTMLButtonElement; copy.hidden = data?.stage !== 'error';
+  const showDiagnostics = data?.stage === 'error' || (data?.stage === 'success' && !!data.diagnostics);
+  const copy = document.getElementById('copy') as HTMLButtonElement; copy.hidden = !showDiagnostics;
   copy.textContent = zh ? '复制诊断' : 'Copy diagnostics';
-  const details = document.getElementById('diagnostics')!; details.hidden = data?.stage !== 'error';
+  const details = document.getElementById('diagnostics')!; details.hidden = !showDiagnostics;
   document.getElementById('diagnostics-label')!.textContent = zh ? '诊断详情（无正文和令牌）' : 'Diagnostics (no text or credentials)';
-  document.getElementById('diagnostics-text')!.textContent = data?.stage === 'error' ? diagnosticText(data, chrome.runtime.getManifest().version) : '';
+  document.getElementById('diagnostics-text')!.textContent = showDiagnostics && data ? diagnosticText(data, chrome.runtime.getManifest().version) : '';
   copy.onclick = () => { if (data) void navigator.clipboard.writeText(diagnosticText(data, chrome.runtime.getManifest().version))
     .then(() => { copy.textContent = zh ? '已复制' : 'Copied'; }).catch(() => { copy.textContent = zh ? '请展开诊断详情手动复制' : 'Copy the details below manually'; }); };
   document.getElementById('heading')!.textContent = zh ? '最近保存状态' : 'Last save status';

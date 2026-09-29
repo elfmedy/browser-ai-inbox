@@ -1,11 +1,13 @@
-export function pageChange(initialUrl: string, currentUrl: string, initial: string[], current: string[]) {
-  const urlChanged = initialUrl !== currentUrl;
-  const visibleChanged = initial.length !== current.length || initial.some((id, index) => id !== current[index]);
-  if (!urlChanged && !visibleChanged) return null;
-  const before = new Set(initial); const after = new Set(current);
-  return { reason: urlChanged ? 'page-url' as const : 'visible-messages' as const,
-    urlChanged, visibleChanged, initialVisibleCount: initial.length, currentVisibleCount: current.length,
-    addedVisibleCount: current.filter(id => !before.has(id)).length,
-    removedVisibleCount: initial.filter(id => !after.has(id)).length,
-    missingVisibleIdCount: current.filter(id => !id).length };
+import { stableJson } from '../core/schema';
+import type { BranchSource } from './branch-source';
+
+export function pageChange(initialUrl: string, currentUrl: string) {
+  return initialUrl !== currentUrl ? { reason: 'page-url' as const } : null;
+}
+
+export function responseChange(initial: BranchSource, current: BranchSource, initialTitle: string, currentTitle: string) {
+  if (stableJson(initial.branch) !== stableJson(current.branch)) return { reason: 'response-branch' as const };
+  if (stableJson(initial.messages) !== stableJson(current.messages)) return { reason: 'response-content' as const };
+  if (initialTitle !== currentTitle) return { reason: 'response-title' as const };
+  return null;
 }

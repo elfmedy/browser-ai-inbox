@@ -20,11 +20,11 @@ function readPage(input: unknown, expectedId: string) {
     messages.push(record);
   }
   const info = requireRecord(source.page_info, 'PAGE_INFO_UNKNOWN');
-  const keys = ['start_cursor', 'end_cursor', 'has_previous_page', 'has_next_page'];
-  if (Object.keys(info).some(key => !keys.includes(key)) ||
-      typeof info.has_previous_page !== 'boolean' || typeof info.has_next_page !== 'boolean' ||
+  if (typeof info.has_previous_page !== 'boolean' || typeof info.has_next_page !== 'boolean' ||
       info.start_cursor !== messages[0]!.id || info.end_cursor !== messages.at(-1)!.id) reject('PAGE_INFO_UNKNOWN');
-  return { source, messages, info, currentNode: source.current_node };
+  // Compare only fields whose semantics define the page, not incidental metadata.
+  return { source, messages, info: { start_cursor: info.start_cursor, end_cursor: info.end_cursor,
+    has_previous_page: info.has_previous_page, has_next_page: info.has_next_page }, currentNode: source.current_node };
 }
 
 /** Experimental API contract from upstream: before=start_cursor returns the

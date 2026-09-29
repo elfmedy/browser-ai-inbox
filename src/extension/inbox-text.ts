@@ -34,6 +34,7 @@ const errors: Record<string, [string, string]> = {
   SOURCE_GENERATING: ['请等待回复完成后再保存。', 'Wait until the reply finishes.'],
   SOURCE_CHANGED: ['保存准备时检测到聊天页面或对话数据变化，本次未提交笔记。请先复制诊断，再等待页面稳定后重新保存。', 'The chat page or conversation data changed during preparation. No note was submitted. Copy diagnostics, then wait for the page to settle and save again.'],
   VISIBLE_CHAIN_NOT_CONFIRMED: ['无法确认当前分支。请刷新聊天并等待加载完成后重试。', 'Could not verify the selected branch. Reload the chat and retry.'],
+  VISIBLE_CHAIN_MISMATCH: ['页面消息与服务端返回的聊天分支不一致，本次未提交笔记。请刷新聊天或重新选择分支后重试。', 'Page messages conflict with the server conversation branch. No note was submitted. Reload the chat or reselect the branch and retry.'],
   REVISION_CONFLICT: ['其他保存已完成，请再次点击保存以读取最新状态。', 'Another save completed. Click Save again to use the latest state.'],
   REPLAN_REQUIRED: ['本地笔记在写入前发生变化，内容已保护。请再次点击保存。', 'The local note changed before writing and was protected. Click Save again.'],
   PENDING_VAULT_MISMATCH: ['有一份待确认的保存属于另一个仓库，请先连接原仓库完成确认。', 'An unfinished save belongs to another vault. Reconnect that vault to resolve it.'],

@@ -6,6 +6,8 @@ AI Inbox saves the complete **current branch** of an ordinary ChatGPT, Gemini, o
 
 ## Provider boundaries
 
+ChatGPT saves the current branch returned by its server API. It validates conversation identity, history coverage and message content, then rereads the API before submission to check that the branch and content are unchanged. Page messages are an optional consistency check: an unrecognized layout, missing message IDs or a partially visible history do not block a validated API capture. Recognizable page messages that conflict with the API branch stop the save. Without page evidence, the export cannot guarantee it follows a historical response variant temporarily selected in the UI. API validation failures never silently fall back to a partial page export.
+
 Gemini and Claude support ordinary conversation pages. The extension loads older messages and checks stable content before saving. Claude also checks the page's message positions and total. Gemini's boundary check uses the settled top of the page; very long histories still need real-account validation. Histories that unload rows during scrolling fail explicitly. Canvas, standalone Artifacts, non-image attachments and unrecognized rich content are not silently reduced to text.
 
 Thinking export includes recognized user-visible summaries only. Raw hidden reasoning and tool results are excluded. If a requested summary cannot be read, the save stops; turn off thinking export to save the ordinary answer.
@@ -36,6 +38,8 @@ The browser reads the current ChatGPT, Gemini, or Claude conversation and downlo
 - **Cannot connect:** open the intended Obsidian vault and enable AI Inbox. Check whether a firewall or proxy blocks local connections.
 - **Need another vault:** right-click the extension icon and choose **Switch vault / Settings**.
 - **Conversation changed or not fully loaded:** refresh the chat page, wait for the complete reply, then save again.
+- **SOURCE_CHANGED:** the URL, API branch, message content or title changed during capture. Wait for the reply to finish and retry without switching chats or branches. Scrolling or virtualized message removal alone does not stop ChatGPT capture.
+- **VISIBLE_CHAIN_MISMATCH:** recognized page messages conflict with the API branch. Reload the chat or reselect the branch. Diagnostic version 5 records initial/current DOM evidence and the API recheck in `branchVerification`, and the change category in `sourceChange`; it contains no message IDs or conversation text. Missing DOM evidence alone is not an error. Diagnostics for successful saves are also available to view and copy on the extension's Last save status page.
 - **Result not confirmed:** keep the original vault open and retry. AI Inbox checks an existing receipt before resubmitting.
 - **Unsupported content:** copy the diagnostic report for an issue. Do not include connection tokens or private conversation text.
 - **Repeated old extension error:** reload the updated extension, clear old error entries, and check for new entries.

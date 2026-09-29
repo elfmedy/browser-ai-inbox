@@ -6,7 +6,7 @@
 
 ## Features
 
-- **One click to save.** Capture all messages on the current ChatGPT, Gemini, or Claude conversation branch.
+- **One click to save.** Capture all messages on ChatGPT's server-returned branch or the current Gemini or Claude conversation branch.
 - **Bring images and references.** Download images and convert supported citations to readable links.
 - **Find your vault.** Discover running Obsidian vaults, confirm the first connection, and remember your default.
 - **Know what happened.** See progress and the final result on the page. Unsupported pages show a small toolbar popup without opening a tab.
@@ -19,7 +19,7 @@ Gemini and Claude support ordinary text/image chats. Canvas, Artifacts, non-imag
 Requires the **[AI Inbox Obsidian plugin](https://github.com/elfmedy/obsidian-ai-inbox#install)** on the same computer. Keep Obsidian open when saving. Currently Alpha; distributed as an unpacked extension, not through either browser's store.
 
 1. Install and enable the Obsidian plugin through BRAT: `elfmedy/obsidian-ai-inbox`.
-2. Download **`ai-inbox-browser-0.5.1.zip`** from the [latest release](https://github.com/elfmedy/browser-ai-inbox/releases/latest). Do not use GitHub's **Source code** ZIP.
+2. Download **`ai-inbox-browser-0.5.3.zip`** from the [latest release](https://github.com/elfmedy/browser-ai-inbox/releases/latest). Do not use GitHub's **Source code** ZIP.
 3. Extract it to a permanent folder. The extracted **`ai-inbox-browser`** folder contains `manifest.json`.
 4. Open your browser's extensions page and turn on **Developer mode**:
 
@@ -46,7 +46,7 @@ Right-click the icon to switch vaults or open settings. Note formatting, thinkin
 
 Unpacked extensions need manual updates. Keep the original loaded directory and avoid removing/reinstalling the extension to retain browser-local preferences and pairing. Users upgrading from the old `ai-inbox-chrome` package can keep that folder name and copy the new files into it.
 
-Version **0.5.1** requires Obsidian AI Inbox **0.5.0+** for Gemini and Claude. Update both components for all features; ChatGPT remains compatible with 0.3.0+ receivers. Chrome and Edge have separate extension storage and each needs its own first connection.
+Saving Gemini and Claude requires both components at **0.5.0 or later**. Update both components for all features; ChatGPT remains compatible with 0.3.0+ receivers. Chrome and Edge have separate extension storage and each needs its own first connection.
 
 ---
 

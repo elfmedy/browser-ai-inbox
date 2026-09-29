@@ -1,5 +1,6 @@
 import { probeObservedRequest } from '../capture/observed-request';
-import { verifyCurrentPath, type GraphMessage } from '../capture/graph';
+import { validatedSource, type BranchSource } from '../capture/branch-source';
+import { readDomObservation, verifyDomWitness, type DomObservation } from '../capture/dom-witness';
 import { imageManifest } from '../render/conversation';
 import { expandCitations } from '../render/citations';
 import { canonicalizeImages } from '../render/markdown';
@@ -9,7 +10,7 @@ import type { CaptureState } from './inbox-types';
 import { conversationLocation, type ConversationLocation } from '../shared/providers';
 import { assertDomReady, loadDomHistory, readDomConversation, type DomProvider } from '../capture/dom-providers';
 import { downloadDomImage } from '../assets/dom-image';
-import { pageChange } from '../capture/source-change';
+import { pageChange, responseChange } from '../capture/source-change';
 
 const previous = globalThis.aiInboxCapture;
 if (!previous || ['success', 'error'].includes(previous.stage) || Date.now() - previous.started > 15 * 60 * 1000) {
@@ -25,53 +26,52 @@ async function capture(state: CaptureState) {
   if (source && source.provider !== 'chatgpt') return captureDom(state, source);
   if (!source) throw new ProbeError('UNSUPPORTED_PAGE', 'Open a supported conversation');
   const id = source.id;
-  const visibleIds = () => Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role]'), node => node.dataset.messageId ?? '');
-  const initialVisible = visibleIds();
+  const initialVisible = readDomObservation(document);
+  let baseline: BranchSource | undefined;
   state.diagnostics = { adapterVersion: 2, phase: 'reading', httpStatus: null, requestCode: null, validation: null };
   const changed = (change: NonNullable<NonNullable<CaptureState['diagnostics']>['sourceChange']>) => {
     if (state.diagnostics) state.diagnostics.sourceChange = change;
     throw new ProbeError('SOURCE_CHANGED', 'Conversation changed');
   };
   const checkPage = () => {
-    const change = pageChange(state.pageUrl, location.href, initialVisible, visibleIds());
+    const change = pageChange(state.pageUrl, location.href);
     if (change) changed({ ...change, stage: state.stage, elapsedMs: Date.now() - state.started });
     if (document.querySelector('[data-testid="stop-button"]')) throw new ProbeError('SOURCE_GENERATING', 'Reply is unfinished');
     if (Date.now() - state.started > 14 * 60 * 1000) throw new ProbeError('CAPTURE_TIMEOUT', 'Capture timed out');
+    if (baseline) checkWitness(readDomObservation(document), 'current');
+  };
+  const checkWitness = (observation: DomObservation, phase: 'initial' | 'current') => {
+    if (!baseline || !state.diagnostics) return;
+    const witness = verifyDomWitness(observation, baseline);
+    state.diagnostics.branchVerification ??= { source: 'api', apiRecheck: 'pending' };
+    state.diagnostics.branchVerification[phase] = witness;
+    if (witness.status === 'conflict') throw new ProbeError('VISIBLE_CHAIN_MISMATCH', 'Page messages conflict with the API branch');
   };
   checkPage();
   const includeThinking = globalThis.aiInboxCaptureOptions?.includeThinking === true;
   let pageDiagnostics: NonNullable<CaptureState['diagnostics']>['page'];
   const request = () => {
     pageDiagnostics = { readyState: document.readyState, ageMs: Math.round(performance.now()), visibility: document.visibilityState,
-      visibleMessages: visibleIds().length, navigationType: (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type ?? 'unknown' };
+      visibleMessages: readDomObservation(document).messages.length, navigationType: (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type ?? 'unknown' };
     return probeObservedRequest({ pageUrl: state.pageUrl, enableToolImages: true, includeThinking,
     scripts: Array.from(document.scripts, script => script.textContent ?? ''),
     resources: performance.getEntriesByType('resource').filter((entry): entry is PerformanceResourceTiming => entry instanceof PerformanceResourceTiming)
       .map(entry => ({ name: entry.name, initiatorType: entry.initiatorType })),
     });
   };
-  const sourceMessages = (result: Awaited<ReturnType<typeof request>>, phase: 'reading' | 'checking' = 'reading'): GraphMessage[] => {
+  const sourceMessages = (result: Awaited<ReturnType<typeof request>>, phase: 'reading' | 'checking' = 'reading'): BranchSource => {
     state.diagnostics = { adapterVersion: 2, phase, httpStatus: result.diagnostics.httpStatus,
+      ...(state.diagnostics?.branchVerification ? { branchVerification: state.diagnostics.branchVerification } : {}),
       discovery: result.diagnostics.discovery, ...(pageDiagnostics ? { page: pageDiagnostics } : {}),
       request: { selection: result.diagnostics.selection, authSource: result.diagnostics.authSource,
         sessionHttpStatus: result.diagnostics.sessionHttpStatus, requestedTurnLimit: result.diagnostics.requestedTurnLimit, pagination: result.diagnostics.pagination },
       requestCode: result.diagnostics.error, validation: result.messageList?.diagnostics ?? null };
-    if (result.diagnostics.error) {
-      const code = result.diagnostics.error === 'CURRENT_CHAT_MESSAGE_ARRAY_UNVERIFIED'
-        ? result.messageList?.diagnostics.issues[0] ?? result.diagnostics.error : result.diagnostics.error;
-      throw new ProbeError(code, 'Conversation response is unverified');
-    }
-    if (result.messageList?.diagnostics.validated) return result.messageList.messages;
-    if (result.graphs.length === 1) return verifyCurrentPath(result.graphs[0], id, true, includeThinking).messages;
-    throw new ProbeError('NO_VALIDATED_CONVERSATION_SOURCE', 'Conversation source is unavailable');
+    return validatedSource(result, id, includeThinking);
   };
-  const first = await request(); const messages = sourceMessages(first);
-  const ordinary = messages.filter(message => message.sourceKind !== 'tool-image' && message.sourceKind !== 'thinking');
-  const thinkingIds = new Set(first.messageList?.thinkingIds ?? (first.graphs.length === 1 ? verifyCurrentPath(first.graphs[0], id, true, includeThinking).thinkingIds : []));
-  const positions = initialVisible.filter(visible => !thinkingIds.has(visible)).map(visible => ordinary.findIndex(message => message.id === visible));
-  if (!positions.length || positions.some((position, index) => position < 0 || (index > 0 && position <= positions[index - 1]!)) || positions.at(-1) !== ordinary.length - 1) {
-    throw new ProbeError('VISIBLE_CHAIN_NOT_CONFIRMED', 'The selected branch does not match the page');
-  }
+  const first = await request(); baseline = sourceMessages(first);
+  const messages = baseline.messages;
+  checkWitness(initialVisible, 'initial');
+  checkPage();
   // Expand references once per message, preserving code/TeX and source order.
   const expanded = messages.map(message => {
     let lastText = -1; message.parts.forEach((part, index) => { if (part.type === 'text') lastText = index; });
@@ -98,8 +98,9 @@ async function capture(state: CaptureState) {
   }
   state.stage = 'checking'; checkPage();
   const final = await request();
-  const contentChanged = stableJson(sourceMessages(final, 'checking')) !== stableJson(messages);
-  if (contentChanged || final.sourceTitle !== first.sourceTitle) changed({ reason: contentChanged ? 'response-content' : 'response-title', stage: state.stage, elapsedMs: Date.now() - state.started });
+  const change = responseChange(baseline, sourceMessages(final, 'checking'), first.sourceTitle, final.sourceTitle);
+  if (state.diagnostics?.branchVerification) state.diagnostics.branchVerification.apiRecheck = change ? 'changed' : 'unchanged';
+  if (change) changed({ ...change, stage: state.stage, elapsedMs: Date.now() - state.started });
   checkPage();
   state.snapshot = Snapshot.parse({ schemaVersion: 1, conversationId: id, sourceUrl: `https://chatgpt.com/c/${id}`,
     title: first.sourceTitle || document.title.replace(/\s*[-|]\s*ChatGPT$/, ''), capturedAt: new Date().toISOString(),

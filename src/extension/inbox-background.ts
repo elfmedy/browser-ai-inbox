@@ -7,7 +7,7 @@ import { ProbeError } from '../shared/errors';
 import { receiver } from './inbox-connection';
 import { selectVault, vaultOverview } from './inbox-vaults';
 import { jobStore, queuedFor } from './inbox-storage';
-import type { Connection, Feedback, Job } from './inbox-types';
+import type { CaptureDiagnostics, Connection, Feedback, Job } from './inbox-types';
 import { CaptureFailure, VaultUnavailableFailure } from './inbox-types';
 
 const busy = new Set<number>();
@@ -50,18 +50,19 @@ async function prepare(tabId: number, pageUrl: string, connection: Connection): 
   await chrome.scripting.executeScript({ target: { tabId }, files: ['inbox-capture.js'] });
   const deadline = Date.now() + 15 * 60 * 1000;
   let captureId = '';
+  let diagnostics: CaptureDiagnostics | undefined;
   while (true) {
     if (Date.now() > deadline) throw new ProbeError('CAPTURE_TIMEOUT', 'Capture timed out');
     const result = await chrome.scripting.executeScript({ target: { tabId }, func: () => {
       const state = globalThis.aiInboxCapture;
       return state ? { id: state.id, pageUrl: state.pageUrl, stage: state.stage, count: state.count, total: state.total, code: state.code,
-        diagnostics: state.stage === 'error' ? state.diagnostics : undefined } : null;
+        diagnostics: ['error', 'success'].includes(state.stage) ? state.diagnostics : undefined } : null;
     } });
     const state = result[0]?.result;
     if (!state || state.pageUrl !== pageUrl || (captureId && captureId !== state.id)) throw new ProbeError('CAPTURE_LOST', 'Capture context changed');
     captureId = state.id;
     if (state.stage === 'error') throw new CaptureFailure(state.code ?? 'CAPTURE_FAILED', state.diagnostics);
-    if (state.stage === 'success') break;
+    if (state.stage === 'success') { diagnostics = state.diagnostics; break; }
     await feedback(tabId, { stage: state.stage, ...(state.count !== undefined ? { count: state.count } : {}), ...(state.total !== undefined ? { total: state.total } : {}) });
     await new Promise(resolve => setTimeout(resolve, 700));
   }
@@ -69,7 +70,8 @@ async function prepare(tabId: number, pageUrl: string, connection: Connection): 
     const state = globalThis.aiInboxCapture; return state?.id === expectedId && location.href === state.pageUrl ? state.snapshot : null;
   }, args: [captureId] });
   const snapshot = Snapshot.parse(payload[0]?.result);
-  const job: Job = { tabId, pageUrl, vaultId: connection.vaultId, request: { requestId: crypto.randomUUID(), expectedRevision: revision, snapshot, exportOptions }, bytes: {} };
+  const job: Job = { tabId, pageUrl, vaultId: connection.vaultId, request: { requestId: crypto.randomUUID(), expectedRevision: revision, snapshot, exportOptions }, bytes: {},
+    ...(diagnostics ? { diagnostics } : {}) };
   await feedback(tabId, { stage: 'transferring', count: 0, total: snapshot.assets.length });
   for (const [index, asset] of snapshot.assets.entries()) {
     const bytes = new Uint8Array(asset.byteLength);
@@ -115,7 +117,7 @@ async function submit(tabId: number, job: Job, connection: Connection, vaultName
     receipt = Receipt.parse(await receiver(connection, 'v1/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(job.request) }));
   }
   if (receipt.requestId !== job.request.requestId) throw new ProbeError('RECEIPT_INVALID', 'Save receipt differs');
-  await feedback(tabId, { stage: 'success', receipt, vaultName }); await jobStore(job.tabId, 'delete');
+  await feedback(tabId, { stage: 'success', receipt, vaultName, ...(job.diagnostics ? { diagnostics: job.diagnostics } : {}) }); await jobStore(job.tabId, 'delete');
 }
 async function save(tab: chrome.tabs.Tab) {
   const tabId = tab.id; if (tabId === undefined) return;

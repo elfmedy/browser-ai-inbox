@@ -1,17 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { pageChange } from '../src/capture/source-change';
+import { pageChange, responseChange } from '../src/capture/source-change';
+import type { BranchSource } from '../src/capture/branch-source';
 describe('source change diagnostics', () => {
-  it('accepts stable visible identities', () => {
-    expect(pageChange('url', 'url', ['a', 'b'], ['a', 'b'])).toBeNull();
+  it('checks navigation independently of visible DOM identities', () => {
+    expect(pageChange('url', 'url')).toBeNull();
+    expect(pageChange('private-url', 'private-new')).toEqual({ reason: 'page-url' });
   });
-  it('distinguishes navigation from DOM changes without exposing identities', () => {
-    expect(pageChange('private-url', 'private-new', ['private-a'], ['private-a'])?.reason).toBe('page-url');
-    const change = pageChange('private-url', 'private-url', ['private-a', 'private-b'], ['private-b', 'private-c']);
-    expect(change).toMatchObject({ reason: 'visible-messages', addedVisibleCount: 1, removedVisibleCount: 1, initialVisibleCount: 2, currentVisibleCount: 2 });
-    expect(JSON.stringify(change)).not.toContain('private');
-  });
-  it('detects reordering and missing IDs even without added messages', () => {
-    expect(pageChange('url', 'url', ['a', 'b'], ['b', 'a'])).toMatchObject({ visibleChanged: true, addedVisibleCount: 0 });
-    expect(pageChange('url', 'url', ['a'], [''])).toMatchObject({ missingVisibleIdCount: 1 });
+  it('detects branch changes even if rendered content is identical', () => {
+    const source: BranchSource = { branch: { currentNode: 'private-tail', nodeIds: ['private-root', 'private-tail'], messageIds: ['private-message'] },
+      thinkingIds: [], messages: [{ id: 'private-message', role: 'assistant', parts: [{ type: 'text', text: 'private-body' }] }] };
+    expect(responseChange(source, structuredClone(source), 'title', 'title')).toBeNull();
+    for (const branch of [{ ...source.branch, currentNode: 'another-tail' }, { ...source.branch, nodeIds: ['different-root', 'private-tail'] },
+      { ...source.branch, messageIds: ['another-message'] }]) {
+      expect(responseChange(source, { ...source, branch }, 'title', 'title')).toEqual({ reason: 'response-branch' });
+    }
+    const content = structuredClone(source); content.messages[0]!.parts = [{ type: 'text', text: 'new-body' }];
+    expect(responseChange(source, content, 'title', 'title')).toEqual({ reason: 'response-content' });
+    expect(responseChange(source, source, 'title', 'new-title')).toEqual({ reason: 'response-title' });
   });
 });
