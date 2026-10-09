@@ -42,6 +42,30 @@ async function capture(respond: (call: number) => unknown) {
 }
 
 describe('ChatGPT capture through the API pipeline', () => {
+  it('adapts presentation components and citations before the final API recheck and snapshot', async () => {
+    const graph = makeGraph();
+    graph.mapping.m3.message.content.parts = ['<box border radius="lg">\n  **Result**\n  <row>\n    <icon name="arrow-down"/>\n  </row>\n  <text size="xs">Claim <Cite ref="turn0search0"/></text>\n\n  ```html\n  <box>literal code</box>\n  ```\n</box>'];
+    const { state, fetcher } = await capture(() => graph);
+    expect(state.stage).toBe('success');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(state.diagnostics?.branchVerification?.apiRecheck).toBe('unchanged');
+    const part = state.snapshot?.messages[3]?.parts[0];
+    expect(part?.type).toBe('text');
+    if (part?.type !== 'text') throw new Error('Expected a Markdown snapshot');
+    expect(part.text).toContain('**Result**'); expect(part.text).toContain('↓');
+    expect(part.text).toContain('引用未解析');
+    expect(part.text).toContain('```html\n<box>literal code</box>\n```');
+    expect(part.text).not.toContain('<row>');
+  });
+  it('still rejects changes to the source layout before saving', async () => {
+    const { state } = await capture(call => {
+      const graph = makeGraph();
+      graph.mapping.m3.message.content.parts = [`<box gap={${call}}>\n  Same text\n</box>`];
+      return graph;
+    });
+    expect(state.code).toBe('SOURCE_CHANGED');
+    expect(state.snapshot).toBeUndefined();
+  });
   it.each(['graph', 'list'])('succeeds with no DOM witness using a validated %s source', async kind => {
     const { state, fetcher } = await capture(() => kind === 'graph' ? makeGraph() : list());
     expect(state.stage).toBe('success');
