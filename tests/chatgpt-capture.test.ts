@@ -42,6 +42,20 @@ async function capture(respond: (call: number) => unknown) {
 }
 
 describe('ChatGPT capture through the API pipeline', () => {
+  it('captures sizing, captions, Link and template SVG without losing the rest of the branch', async () => {
+    const graph = makeGraph();
+    graph.mapping.m3.message.content.parts = ['<box width="100%" height="100%">\n  <text textAlign="center">Result</text>\n  <svg viewBox="0 0 100 100">\n    {#each [{x:1,label:"one"}] as item}\n    <text x={item.x} textAnchor="middle">{item.label}</text>\n    {/each}\n  </svg>\n  <caption>Diagram notes</caption>\n  <Link url="https://example.org/guide" title="Guide"/>\n</box>'];
+    const { state, fetcher } = await capture(() => graph);
+    expect(state.stage).toBe('success'); expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(state.snapshot?.messages).toHaveLength(4);
+    expect(state.diagnostics?.branchVerification?.apiRecheck).toBe('unchanged');
+    const part = state.snapshot?.messages[3]?.parts[0];
+    if (part?.type !== 'text') throw new Error('Expected a Markdown snapshot');
+    expect(part.text).toContain('SVG source (not rendered)');
+    expect(part.text).toContain('{#each [{x:1,label:"one"}] as item}');
+    expect(part.text).toContain('Diagram notes');
+    expect(part.text).toContain('[Guide](<https://example.org/guide>)');
+  });
   it('adapts presentation components and citations before the final API recheck and snapshot', async () => {
     const graph = makeGraph();
     graph.mapping.m3.message.content.parts = ['<box border radius="lg">\n  **Result**\n  <row>\n    <icon name="arrow-down"/>\n  </row>\n  <text size="xs">Claim <Cite ref="turn0search0"/></text>\n\n  ```html\n  <box>literal code</box>\n  ```\n</box>'];
